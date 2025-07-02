@@ -11,6 +11,7 @@ UIS_BeInteractComponent_Box::UIS_BeInteractComponent_Box()
 	PrimaryComponentTick.bCanEverTick = true;
 
 	// ...
+	SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
 }
 
 #if WITH_EDITOR
@@ -58,11 +59,6 @@ void UIS_BeInteractComponent_Box::TickComponent(float DeltaTime, ELevelTick Tick
 FText UIS_BeInteractComponent_Box::GetInteractText()
 {
 	return BeInteractInfo.InteractText;
-}
-
-FText UIS_BeInteractComponent_Box::GetInteractFailText()
-{
-	return BeInteractInfo.InteractFailText;
 }
 
 EIS_InteractType UIS_BeInteractComponent_Box::GetInteractType()

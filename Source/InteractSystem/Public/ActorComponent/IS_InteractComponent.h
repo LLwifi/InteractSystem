@@ -6,7 +6,10 @@
 #include "Components/ActorComponent.h"
 #include <GameplayTagContainer.h>
 #include "Net/UnrealNetwork.h"
+#include "../../../../../CommonCompare/Source/CommonCompare/Public/CC_StructAndEnum.h"
+#include "Kismet/KismetSystemLibrary.h"//EDrawDebugTrace需要
 #include "IS_InteractComponent.generated.h"
+
 
 ////任务角色
 //UENUM(BlueprintType)
@@ -19,6 +22,39 @@
 //};
 
 //DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FTaskComponentDelegate, UTS_TaskComponent*, TaskComponent,  UTS_Task*, Task);
+
+class UIS_BeInteractComponent_Box;
+
+/*交互信息
+* 是否仅交互一个/可以交互的范围、同时交互的数量
+* 暂定
+*/
+USTRUCT(BlueprintType)
+struct FCC_InteractInfo
+{
+	GENERATED_BODY()
+public:
+	//是否仅交互一个资源
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bInteractOnce = true;
+};
+
+/*交互射线信息
+*/
+USTRUCT(BlueprintType)
+struct FCC_InteractRayInfo
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bTraceComplex;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<AActor*> ActorsToIgnore;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIgnoreSelf;
+};
 
 /*交互组件：该组件拥有交互其他资源的能力
 */
@@ -45,20 +81,68 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 		
+	//交互
+	UFUNCTION(BlueprintCallable)
+	bool Interact(USceneComponent* BeInteractComponent);
+
+	//相机射线获取优先级最高的可被交互组件
+	UFUNCTION(BlueprintCallable)
+	USceneComponent* CameraTraceGetTopPriority(FCC_InteractRayInfo InteractRayInfo);
+
+
+	//尝试从摄像机发射射线触发交互
+	UFUNCTION(BlueprintCallable)
+	bool TryTriggerInteract_CameraTrace(FCC_InteractRayInfo InteractRayInfo, TArray<FHitResult>& OutHit);
+	
+	//开始进行交互检测
+	UFUNCTION(BlueprintCallable)
+	void InteractCheckStateChange(bool IsActive);
+
+	//交互检测——检测周围/准心是否有可交互的资源
+	UFUNCTION(BlueprintCallable)
+	void InteractCheck();
 public:
+	//射线的距离
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")
+	float TraceDistance = 5000.0f;
+	//射线的响应类型
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")
+	TEnumAsByte<ETraceTypeQuery> TraceChannel;
+
+	//-------------------射线调试信息-------------------
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
+	TEnumAsByte<EDrawDebugTrace::Type> DrawDebugType;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
+	FLinearColor TraceColor = FLinearColor::Red;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
+	FLinearColor TraceHitColor = FLinearColor::Green;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
+	float DrawTime;
+
+	//-------------------交互检测信息-------------------
+	//在BeginPlay时是否要激活交互检测
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
+	bool bBeginPlayIsActiveInteractCheck = false;
+	UPROPERTY()
+	FTimerHandle InteractCheckTimeHandle;
+	//交互检测射线的间隔
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
+	float InteractCheckInterval = 0.1f;
+	//交互检测射线的信息
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
+	FCC_InteractRayInfo InteractCheckRayInfo;
+	//当前交互检测的目标
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	USceneComponent* InteractCheckComponent;
 
 	//UPROPERTY(BlueprintAssignable)
 	//FTaskComponentDelegate AddTaskEvent;
 	//UPROPERTY(BlueprintAssignable)
 	//FTaskComponentDelegate TaskEndEvent;
 
-	/*交互距离：该组件的Actor和交互目标之间的距离不能小于该值
-	* -1表示无距离限制
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float InteractDistance = -1.0f;
 
-	//全部交互目标
+
+	//对比信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		TArray<AActor*> AllInteractActor;
+	FCC_CompareInfo CompareInfo;
 };

@@ -7,7 +7,9 @@
 #include <Engine/DataTable.h>
 #include <GameplayTagContainer.h>
 #include "Common/IS_Interface.h"
+#include "../../../../../CommonCompare/Source/CommonCompare/Public/CC_StructAndEnum.h"
 #include "IS_BeInteractComponent.generated.h"
+
 
 /*被交互的信息
 */
@@ -19,13 +21,15 @@ public:
 	//交互UI显示文本
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FText InteractText;
-	//交互失败UI显示文本，在为通过交互判断后显示该文本
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FText InteractFailText;
 
 	//交互方式类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractType InteractType = EIS_InteractType::Instant;
+	///*交互距离：该组件的Actor和交互目标之间的距离不能小于该值
+	//* -1表示无距离限制
+	//*/
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	//float InteractDistance = -1.0f;
 	//多段交互次数 如果交互方式类型为多段持续交互将开启该参数的配置，该值同时影响交互时长（InteractTime）的最大数组下标
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "InteractType == EIS_InteractType::MultiSegment"))
 	int32 MultiInteractNum = 2;
@@ -45,6 +49,10 @@ public:
 	//交互优先级 该值越大越优先交互
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 InteractPriority = 0;
+
+	//被比对的信息
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FCC_BeCompareInfo BeCompareInfo;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInteractDelegate, UIS_InteractComponent*, InteractComponent);
@@ -74,7 +82,6 @@ public:
 
 	//-----------------------------------------------------IIS_Interface
 	virtual FText GetInteractText();
-	virtual FText GetInteractFailText();
 	virtual EIS_InteractType GetInteractType();
 	virtual int32 GetMultiInteractNum();
 	virtual TArray<float> GetInteractTime();
@@ -107,6 +114,4 @@ public:
 	//被交互的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FIS_BeInteractInfo BeInteractInfo;
-
-
 };

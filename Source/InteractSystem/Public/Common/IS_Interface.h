@@ -49,13 +49,6 @@ public:
 	virtual FText GetInteractText_Implementation(){ return FText(); };
 
 	/*
-	* 获取交互失败的显示文本
-	*/
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-		FText GetInteractFailText();
-	virtual FText GetInteractFailText_Implementation() { return FText(); };
-
-	/*
 	* 获取交互类型
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
