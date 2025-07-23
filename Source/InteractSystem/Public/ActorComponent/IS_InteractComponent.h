@@ -10,7 +10,6 @@
 #include "Kismet/KismetSystemLibrary.h"//EDrawDebugTrace需要
 #include "IS_InteractComponent.generated.h"
 
-
 ////任务角色
 //UENUM(BlueprintType)
 //enum class ETS_TaskRole :uint8
@@ -21,9 +20,10 @@
 //	People UMETA(DisplayName = "People-与任务相关的单位")
 //};
 
-//DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FTaskComponentDelegate, UTS_TaskComponent*, TaskComponent,  UTS_Task*, Task);
+class UIS_BeInteractComponent;
 
-class UIS_BeInteractComponent_Box;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FIS_InteractEvent, UIS_InteractComponent*, InteractComponent, UIS_BeInteractComponent*, BeInteractComponent);
+
 
 /*交互信息
 * 是否仅交互一个/可以交互的范围、同时交互的数量
@@ -80,19 +80,31 @@ protected:
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-		
-	//交互
-	UFUNCTION(BlueprintCallable)
-	bool Interact(USceneComponent* BeInteractComponent);
+	
+	//获取签名
+	UFUNCTION(BlueprintPure)
+	FName GetRoleSign();
 
-	//相机射线获取优先级最高的可被交互组件
+	//开始交互
 	UFUNCTION(BlueprintCallable)
-	USceneComponent* CameraTraceGetTopPriority(FCC_InteractRayInfo InteractRayInfo);
+	bool StartInteract(UIS_BeInteractComponent* BeInteractComponent);
 
+	/*结束交互
+	* 对当前正在交互的组件进行结束交互（通过函数StartInteract触发交互的组件为当前正在交互的组件）
+	*/
+	UFUNCTION(BlueprintCallable)
+	void EndCurInteract();
+
+	/*相机射线获取可被交互组件
+	* return：全部命中的可被交互组件
+	* TopPriorityCom：最高交互优先级的交互组件
+	*/
+	UFUNCTION(BlueprintCallable)
+	TArray<UIS_BeInteractComponent*> CameraTraceGetBeInteractCom(FCC_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom);
 
 	//尝试从摄像机发射射线触发交互
 	UFUNCTION(BlueprintCallable)
-	bool TryTriggerInteract_CameraTrace(FCC_InteractRayInfo InteractRayInfo, TArray<FHitResult>& OutHit);
+	bool TryTriggerInteract_CameraTrace(FCC_CompareInfo CompareInfo, FCC_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText);
 	
 	//开始进行交互检测
 	UFUNCTION(BlueprintCallable)
@@ -101,7 +113,28 @@ public:
 	//交互检测——检测周围/准心是否有可交互的资源
 	UFUNCTION(BlueprintCallable)
 	void InteractCheck();
+
+	//广播交互事件
+	UFUNCTION(NetMulticast, Reliable)
+	void UpdateInteractTarget(UIS_BeInteractComponent* BeInteractComponent);
+
+	/*验证当前正在交互目标的完成交互的Server版本
+	* 该函数主要是给在客户端存在的验证对象/或其他类似需求的资源使用，例如QTEUI
+	*/
+	UFUNCTION(BlueprintCallable, Server, Reliable)
+	void ServerVerifyCurInteractComplete();
+
+	/*验证当前正在交互目标的结束交互的Server版本
+	* 该函数主要是给在客户端存在的验证对象/或其他类似需求的资源使用，例如QTEUI
+	*/
+	UFUNCTION(BlueprintCallable, Server, Reliable)
+	void ServerVerifyCurInteractEnd();
+
 public:
+	//该Actor的角色签名（角色唯一标识-通常是ID/或者玩家ID
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FName RoleSign = "None";
+
 	//射线的距离
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")
 	float TraceDistance = 5000.0f;
@@ -132,17 +165,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
 	FCC_InteractRayInfo InteractCheckRayInfo;
 	//当前交互检测的目标
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	USceneComponent* InteractCheckComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+	UIS_BeInteractComponent* InteractCheckComponent;
 
-	//UPROPERTY(BlueprintAssignable)
-	//FTaskComponentDelegate AddTaskEvent;
+	UPROPERTY(BlueprintAssignable)
+	FIS_InteractEvent UpdateInteractEvent;
 	//UPROPERTY(BlueprintAssignable)
 	//FTaskComponentDelegate TaskEndEvent;
 
+	//当前正在交互中的目标 通常是交互优先级最大的目标
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Replicated)
+	UIS_BeInteractComponent* CurStartInteractComponent;
 
 
-	//对比信息
+	//默认对比信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FCC_CompareInfo CompareInfo;
+	FCC_CompareInfo DefaultCompareInfo;
 };

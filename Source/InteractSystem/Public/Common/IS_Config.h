@@ -24,4 +24,16 @@ public:
 		static UIS_Config* GetIS_Config() { return GetInstance(); }
 
 public:
+
+	//默认的交互提示面板
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
+	TSoftClassPtr<UUserWidget> DefaultInteractTipPanelClass;
+
+	////交互次数不足时的默认失败文本提示
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	//FText InteractNum_DefaultFailText;
+
+	////未开启交互时的默认失败文本提示
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	//FText InteractActive_DefaultFailText;
 };

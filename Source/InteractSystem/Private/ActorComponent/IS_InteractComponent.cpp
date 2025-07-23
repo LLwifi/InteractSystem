@@ -2,9 +2,11 @@
 
 
 #include "ActorComponent/IS_InteractComponent.h"
+#include "ActorComponent/IS_BeInteractComponent.h"
 #include <Kismet/GameplayStatics.h>
 #include <Kismet/KismetMathLibrary.h>
-#include "Common/IS_Interface.h"
+#include "Common/IS_BeInterface.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 
 // Sets default values for this component's properties
@@ -14,6 +16,7 @@ UIS_InteractComponent::UIS_InteractComponent()
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
 
+	SetIsReplicatedByDefault(true);
 	// ...
 }
 
@@ -43,14 +46,18 @@ void UIS_InteractComponent::BeginPlay()
 	Super::BeginPlay();
 
 	// ...
-	InteractCheckStateChange(bBeginPlayIsActiveInteractCheck);
+	if (UKismetSystemLibrary::IsServer(this))
+	{
+		InteractCheckStateChange(bBeginPlayIsActiveInteractCheck);
+	}
+	
 }
 
 void UIS_InteractComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	//DOREPLIFETIME(UTS_TaskComponent, AllTask);
+	DOREPLIFETIME(UIS_InteractComponent, CurStartInteractComponent);
 }
 
 // Called every frame
@@ -61,16 +68,46 @@ void UIS_InteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	// ...
 }
 
-bool UIS_InteractComponent::Interact(USceneComponent* BeInteractComponent)
+FName UIS_InteractComponent::GetRoleSign()
 {
+	if (RoleSign.IsNone())
+	{
+		return FName(UKismetSystemLibrary::GetDisplayName(this));
+	}
+	return RoleSign;
+}
+
+bool UIS_InteractComponent::StartInteract(UIS_BeInteractComponent* BeInteractComponent)
+{
+	if (BeInteractComponent)
+	{
+		if (CurStartInteractComponent)//当前是否有已经在交互的另一个资源
+		{
+			EndCurInteract();
+		}
+		CurStartInteractComponent = BeInteractComponent;
+		IIS_BeInterface::Execute_InteractStart(BeInteractComponent, this);//通知目标开始与他交互了
+		UpdateInteractTarget(BeInteractComponent);
+	}
+	
 	return true;
 }
 
-USceneComponent* UIS_InteractComponent::CameraTraceGetTopPriority(FCC_InteractRayInfo InteractRayInfo)
+void UIS_InteractComponent::EndCurInteract()
 {
-	USceneComponent* TopPriorityCom = nullptr;//最大优先级的可被交互资源
+	if (CurStartInteractComponent)
+	{
+		IIS_BeInterface::Execute_InteractEnd(CurStartInteractComponent, this);
+		CurStartInteractComponent = nullptr;
+	}
+}
+
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteractCom(FCC_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom)
+{
+	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
+	TopPriorityCom = nullptr;
 	APawn* Pawn = Cast<APawn>(GetOwner());
-	if (Pawn)
+	if (Pawn && Pawn->GetController())
 	{
 		FVector CameraLocation, TraceEndLocation;
 		FRotator CameraRotation;
@@ -79,32 +116,32 @@ USceneComponent* UIS_InteractComponent::CameraTraceGetTopPriority(FCC_InteractRa
 
 		//如果考虑模糊处理，这里可以使用圆形的射线
 		TArray<FHitResult> OutHit;
-		if (UKismetSystemLibrary::LineTraceMulti(this, CameraLocation, TraceEndLocation, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime))
+		UKismetSystemLibrary::LineTraceMulti(this, CameraLocation, TraceEndLocation, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
+		for (FHitResult& HitResult : OutHit)
 		{
-			for (FHitResult& HitResult : OutHit)
+			UIS_BeInteractComponent* BeInteractComponent = Cast<UIS_BeInteractComponent>(HitResult.GetComponent());
+			if (BeInteractComponent)
 			{
-				USceneComponent* SceneComponent = Cast<USceneComponent>(HitResult.GetComponent());
-				if (SceneComponent && SceneComponent->Implements<UInterface>())
+				AllBeInteract.Add(BeInteractComponent);
+				if (!TopPriorityCom || //为空直接设置
+					IIS_BeInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInterface::Execute_GetInteractPriority(TopPriorityCom))
 				{
-					if (!TopPriorityCom || //为空直接设置
-						IIS_Interface::Execute_GetInteractPriority(SceneComponent) > IIS_Interface::Execute_GetInteractPriority(TopPriorityCom))
-					{
-						TopPriorityCom = SceneComponent;
-					}
+					TopPriorityCom = BeInteractComponent;
 				}
 			}
 		}
 	}
-	return TopPriorityCom;
+	return AllBeInteract;
 }
 
-bool UIS_InteractComponent::TryTriggerInteract_CameraTrace(FCC_InteractRayInfo InteractRayInfo, TArray<FHitResult>& OutHit)
+bool UIS_InteractComponent::TryTriggerInteract_CameraTrace(FCC_CompareInfo CompareInfo, FCC_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
+	InteractCheck();
 	bool ReturnBool = false;
-	USceneComponent* BeInteractComponent = CameraTraceGetTopPriority(InteractRayInfo);
-	if (BeInteractComponent)
+	AllBeInteract = CameraTraceGetBeInteractCom(InteractRayInfo, TopPriorityCom);
+	if (TopPriorityCom && IIS_BeInterface::Execute_CanInteract(TopPriorityCom, this, CompareInfo, FailText))
 	{
-		Interact(BeInteractComponent);
+		StartInteract(TopPriorityCom);
 		ReturnBool = true;
 	}
 	return ReturnBool;
@@ -124,22 +161,47 @@ void UIS_InteractComponent::InteractCheckStateChange(bool IsActive)
 
 void UIS_InteractComponent::InteractCheck()
 {
-	USceneComponent* BeInteractComponent = CameraTraceGetTopPriority(InteractCheckRayInfo);
+	UIS_BeInteractComponent* TopPriorityCom;
+	CameraTraceGetBeInteractCom(InteractCheckRayInfo, TopPriorityCom);
 	if (InteractCheckComponent)//当前是否保存了交互检测的目标
 	{
-		if (!BeInteractComponent)//新目标为空
+		if (!TopPriorityCom)//新目标为空
 		{
-			IIS_Interface::Execute_InteractLeave(InteractCheckComponent, this);//移出旧交互目标
+			IIS_BeInterface::Execute_InteractLeave(InteractCheckComponent, this);//移出旧交互目标
 		}
-		else if(BeInteractComponent != InteractCheckComponent)//新目标与保存的目标不一致
+		else if(TopPriorityCom != InteractCheckComponent)//新目标与保存的目标不一致
 		{
-			IIS_Interface::Execute_InteractLeave(InteractCheckComponent, this);//移出旧交互目标
-			IIS_Interface::Execute_InteractEnter(BeInteractComponent, this);//移入新交互目标
+			IIS_BeInterface::Execute_InteractLeave(InteractCheckComponent, this);//移出旧交互目标
+			IIS_BeInterface::Execute_InteractEnter(TopPriorityCom, this);//移入新交互目标
+			UpdateInteractTarget(TopPriorityCom);
 		}
 	}
-	else if(BeInteractComponent)
+	else if(TopPriorityCom)
 	{
-		IIS_Interface::Execute_InteractEnter(BeInteractComponent, this);//移入新交互目标
+		IIS_BeInterface::Execute_InteractEnter(TopPriorityCom, this);//移入新交互目标
+		UpdateInteractTarget(TopPriorityCom);
 	}
-	InteractCheckComponent = BeInteractComponent;
+	InteractCheckComponent = TopPriorityCom;
+}
+
+void UIS_InteractComponent::ServerVerifyCurInteractComplete_Implementation()
+{
+	if (CurStartInteractComponent)
+	{
+		IIS_BeInterface::Execute_InteractComplete(CurStartInteractComponent, this);
+	}
+}
+
+void UIS_InteractComponent::ServerVerifyCurInteractEnd_Implementation()
+{
+	if (CurStartInteractComponent)
+	{
+		CurStartInteractComponent->BeInteractDynamicInfo.bIsVerifying = false;
+		IIS_BeInterface::Execute_InteractEnd(CurStartInteractComponent, this);
+	}
+}
+
+void UIS_InteractComponent::UpdateInteractTarget_Implementation(UIS_BeInteractComponent* BeInteractComponent)
+{
+	UpdateInteractEvent.Broadcast(this, BeInteractComponent);
 }

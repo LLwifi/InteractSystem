@@ -40,6 +40,7 @@ public class InteractSystem : ModuleRules
 				"SlateCore",
                 "DeveloperSettings",
                 "GameplayTags",
+                "UMG",
                 "CommonCompare",//该模块依赖另外一个插件
 				// ... add private dependencies that you statically link with here ...	
 			}
