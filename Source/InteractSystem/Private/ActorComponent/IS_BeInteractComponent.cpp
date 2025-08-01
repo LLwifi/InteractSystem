@@ -6,6 +6,7 @@
 #include "Engine/AssetManager.h"
 #include "Blueprint/UserWidget.h"
 #include <Kismet/KismetMathLibrary.h>
+#include "Components/MeshComponent.h"
 
 // Sets default values for this component's properties
 UIS_BeInteractComponent::UIS_BeInteractComponent()
@@ -56,35 +57,9 @@ void UIS_BeInteractComponent::BeginPlay()
 
 	// ...
 
-
-
-	//后面该部分考虑包装成函数，在BeginPlay和交互时间被修改时应该调用一次
-	if (BeInteractInfo.InteractType != EIS_InteractType::Instant)//非瞬间交互才存在交互时间
-	{
-		BeInteractDynamicInfo.InteractTotalTime = 0.0f;
-		for (float& f : BeInteractInfo.InteractTime)
-		{
-			BeInteractDynamicInfo.InteractTotalTime += f;
-		}
-	}
-
-	BeInteractDynamicInfo.bInteractActive = BeInteractInfo.bDefaultInteractActive;
-
-	/*多段交互 且 累计的特殊处理 这个处理得在BeInteractDynamicInfo.InteractTotalTime计算（上文）之后，否则会使交互时长的计算变多
-	* 该处理会使{3.0f,3.0f,3.0f}——》{3.0f,6.0f,9.0f}
-	* 原因：多段交互时 累计时长不会清零，需要通过计算（减上一个下标的值）得出下次交互所需的时长
-	* 在比对是否完成某个阶段时，处理后才能比对正确，第二次交互了1.5秒的比对应该是4.5 < 6.0,属于未完成
-	*/
-	if (BeInteractInfo.InteractTime.Num() > 1 && BeInteractInfo.InteractCumulativeTimeType != EIS_InteractCumulativeTimeType::NotCumulative)
-	{
-		for (int32 i = 0; i < BeInteractInfo.InteractTime.Num(); i++)
-		{
-			if (i > 0)//从第二个时间开始处理
-			{
-				BeInteractInfo.InteractTime[i] += BeInteractInfo.InteractTime[i - 1];
-			}
-		}
-	}
+	IIS_BeInteractInterface::Execute_SetInteractTime(this, BeInteractInfo.InteractTime);
+	IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractInfo.InteractNum);
+	IIS_BeInteractInterface::Execute_SetInteractActive(this, BeInteractInfo.bDefaultInteractActive);
 }
 
 
@@ -108,7 +83,7 @@ FIS_BeInteractDynamicInfo UIS_BeInteractComponent::GetBeInteractDynamicInfo_Impl
 
 bool UIS_BeInteractComponent::IsDisplayInteractText_Implementation()
 {
-	return BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bIsNotActiveDisplayInteractText;
+	return BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bNotActiveIsDisplayInteractText;
 }
 
 FText UIS_BeInteractComponent::GetInteractText_Implementation()
@@ -129,13 +104,6 @@ int32 UIS_BeInteractComponent::GetMultiInteractNum_Implementation()
 TArray<float> UIS_BeInteractComponent::GetInteractTime_Implementation(float& TotalTime)
 {
 	//TotalTime = 0.0f;//不加这一句，多次调用该函数会累计
-	//if (BeInteractInfo.InteractType != EIS_InteractType::Instant)//非瞬间交互才存在交互时间
-	//{
-	//	for (float& f : BeInteractInfo.InteractTime)
-	//	{
-	//		TotalTime += f;
-	//	}
-	//}
 	TotalTime = BeInteractDynamicInfo.InteractTotalTime;
 	return BeInteractInfo.InteractTime;
 }
@@ -145,9 +113,50 @@ float UIS_BeInteractComponent::GetAlreadyInteractTime_Implementation()
 	return BeInteractDynamicInfo.InteractCumulativeTime;
 }
 
+float UIS_BeInteractComponent::SetInteractTime_Implementation(const TArray<float>& InteractTime)
+{
+	BeInteractInfo.InteractTime = InteractTime;
+	if (BeInteractInfo.InteractType != EIS_InteractType::Instant)//非瞬间交互才存在交互时间
+	{
+		BeInteractDynamicInfo.InteractTotalTime = 0.0f;
+		for (float& f : BeInteractInfo.InteractTime)
+		{
+			BeInteractDynamicInfo.InteractTotalTime += f;
+		}
+	}
+
+	/*多段交互 且 累计的特殊处理 这个处理得在BeInteractDynamicInfo.InteractTotalTime计算（上文）之后，否则会使交互时长的计算变多
+	* 该处理会使{3.0f,3.0f,3.0f}——》{3.0f,6.0f,9.0f}
+	* 原因：多段交互时 累计时长不会清零，需要通过计算（减上一个下标的值）得出下次交互所需的时长
+	* 在比对是否完成某个阶段时，处理后才能比对正确，第二次交互了1.5秒的比对应该是4.5 < 6.0,属于未完成
+	*/
+	if (BeInteractInfo.InteractTime.Num() > 1 && BeInteractInfo.InteractCumulativeTimeType != EIS_InteractCumulativeTimeType::NotCumulative)
+	{
+		for (int32 i = 0; i < BeInteractInfo.InteractTime.Num(); i++)
+		{
+			if (i > 0)//从第二个时间开始处理
+			{
+				BeInteractInfo.InteractTime[i] += BeInteractInfo.InteractTime[i - 1];
+			}
+		}
+	}
+
+	return BeInteractDynamicInfo.InteractTotalTime;
+}
+
 int32 UIS_BeInteractComponent::GetInteractNum_Implementation()
 {
-	return BeInteractInfo.InteractNum;
+	return BeInteractDynamicInfo.InteractNum;
+}
+
+int32 UIS_BeInteractComponent::SetInteractNum_Implementation(int32 NewInteractNum)
+{
+	BeInteractDynamicInfo.InteractNum = NewInteractNum;
+	if (BeInteractInfo.bInteractActiveFromInteractNum)
+	{
+		IIS_BeInteractInterface::Execute_SetInteractActive(this, BeInteractDynamicInfo.InteractNum >= 0);
+	}
+	return int32();
 }
 
 EIS_InteractNumSubtractType UIS_BeInteractComponent::GetInteractNumSubtractType_Implementation()
@@ -178,19 +187,20 @@ bool UIS_BeInteractComponent::IsInteractActive_Implementation()
 
 bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
 {
-	if (IIS_BeInterface::Execute_IsInteractActive(this))//是否激活
+	FailText = FText();
+	if (IIS_BeInteractInterface::Execute_IsInteractActive(this))//是否激活
 	{
-		float InteractAngle = GetAngleFromTargetDir(InteractComponent->GetOwner()->GetActorForwardVector());
+		float InteractAngle = GetAngleFromTargetDir(InteractComponent->GetOwner()->GetActorLocation() - GetOwner()->GetActorLocation());
 		if (BeInteractInfo.InteractAngleVerify.Contains(InteractAngle))//角度验证
 		{
 			bool IsRoleHaveInteractNum = true;//交互者是否还有交互次数
 			//不同的交互者的交互次数是否分开记录
-			if (BeInteractInfo.bInteractNumIsSeparate)
+			if (BeInteractInfo.bInteractNumIsMultiplepeople)
 			{
 				IsRoleHaveInteractNum = BeInteractDynamicInfo.GetInteractCountFromRoleSign(InteractComponent->GetRoleSign()) < BeInteractInfo.EveryoneInteractlNum;
 			}
 
-			if (IIS_BeInterface::Execute_GetInteractNum(this) > 0 && IsRoleHaveInteractNum)//交互次数是否足够
+			if (IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0 && IsRoleHaveInteractNum)//交互次数是否足够
 			{
 				if (BeInteractDynamicInfo.AllInteractComponent.Num() < BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 				{
@@ -211,7 +221,7 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 			FailText = BeInteractInfo.InteractAngle_FailText;
 		}
 	}
-	else
+	else if(BeInteractInfo.bNotActiveIsDisplayInteractText)//没激活是否显示交互文本 包括了报错文本
 	{
 		FailText = BeInteractInfo.InteractActive_FailText;
 	}
@@ -229,7 +239,7 @@ bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_Int
 		{
 			if (!BeInteractDynamicInfo.InteractVerifyObject)//是否需要创建验证对象
 			{
-				BeInteractDynamicInfo.InteractVerifyObject = IIS_BeInterface::Execute_CreateVerifyObject(this, InteractComponent);
+				BeInteractDynamicInfo.InteractVerifyObject = IIS_BeInteractInterface::Execute_CreateVerifyObject(this, InteractComponent);
 			}
 
 			if (BeInteractDynamicInfo.InteractVerifyObject)//是否有额外的验证对象
@@ -237,6 +247,27 @@ bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_Int
 				IIS_BeInteractVerifyInterface::Execute_InteractVerifyStart(BeInteractDynamicInfo.InteractVerifyObject, InteractComponent, this);
 			}
 			BeInteractDynamicInfo.bIsVerifying = true;
+
+			switch (InteractEventNetType)
+			{
+			case EIS_InteractEventNetType::Server:
+			{
+				OnInteractVerify.Broadcast(InteractComponent, BeInteractDynamicInfo.InteractVerifyObject);
+				break;
+			}
+			case EIS_InteractEventNetType::Client:
+			{
+				NetClient_OnInteractVerify(InteractComponent, BeInteractDynamicInfo.InteractVerifyObject);
+				break;
+			}
+			case EIS_InteractEventNetType::NetMulticast:
+			{
+				NetMulti_OnInteractVerify(InteractComponent, BeInteractDynamicInfo.InteractVerifyObject);
+				break;
+			}
+			default:
+				break;
+			}
 			return false;
 		}
 		return true;
@@ -299,20 +330,61 @@ UUserWidget* UIS_BeInteractComponent::CreateVerifyObject_UI_Implementation(UIS_I
 	return UI;
 }
 
-void UIS_BeInteractComponent::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
+	InteractTraceCheck(TraceType);
 	BeInteractDynamicInfo.bIsInEnter = true;
-	OnInteractEnter.Broadcast(InteractComponent);
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractEnter.Broadcast(InteractComponent, TraceType);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractEnter(InteractComponent, TraceType);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractEnter(InteractComponent, TraceType);
+		break;
+	}
+	default:
+		break;
+	}
 }
 
-void UIS_BeInteractComponent::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
+	InteractTraceCheck(TraceType,false);
 	BeInteractDynamicInfo.bIsInEnter = false;
-	if (IIS_BeInterface::Execute_InteractLeaveIsEnd(this))//在移出被交互物时，要不要停止交互
+	if (IIS_BeInteractInterface::Execute_InteractLeaveIsEnd(this) && BeInteractDynamicInfo.bIsInInteract)//在移出被交互物时，要不要停止交互
 	{
-		IIS_BeInterface::Execute_InteractEnd(this, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractEnd(this, InteractComponent);
 	}
-	OnInteractLeave.Broadcast(InteractComponent);
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractLeave.Broadcast(InteractComponent, TraceType);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractLeave(InteractComponent, TraceType);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractLeave(InteractComponent, TraceType);
+		break;
+	}
+	default:
+		break;
+	}
+
 }
 
 bool UIS_BeInteractComponent::InteractLeaveIsEnd_Implementation()
@@ -339,12 +411,32 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 {
 	BeInteractDynamicInfo.bIsInInteract = true;
 	BeInteractDynamicInfo.AllInteractComponent.Add(InteractComponent);
-	OnInteractStart.Broadcast(InteractComponent);
+
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractStart.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractStart(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractStart(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
 
 	/*如果不同的交互者的交互次数不分开记录，这里也记录一下当作历史交互单位
 	* 如果需要分开记录会在结束或完成时根据配置添加
 	*/
-	if (!BeInteractInfo.bInteractNumIsSeparate)
+	if (!BeInteractInfo.bInteractNumIsMultiplepeople)
 	{
 		BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 1, 0.0f, 0);
 	}
@@ -414,6 +506,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 				BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;//清除统一累计时长
 			}
 			BeInteractDynamicInfo.ClearInteractTimeFromRoleSign(InteractComponent->GetRoleSign());//清除结束者的时长
+			BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
 			break;
 		}
 		case EIS_InteractCumulativeTimeType::Interval://按间隔累计
@@ -443,7 +536,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 		//不是完成交互触发的交互结束才减少交互次数，避免次数被多次减少
 		if (BeInteractDynamicInfo.bInteractActive)//交互激活的资源才可能去扣除次数
 		{
-			if (BeInteractInfo.bInteractNumIsSeparate)//交互次数分开记录吗
+			if (BeInteractInfo.bInteractNumIsMultiplepeople)//交互次数分开记录吗
 			{
 				if (BeInteractInfo.EveryoneInteractNumSubtractType == EIS_InteractNumSubtractType::End)
 				{
@@ -454,7 +547,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 			{
 				if (BeInteractInfo.InteractNumSubtractType == EIS_InteractNumSubtractType::End)
 				{
-					BeInteractInfo.InteractNum--;
+					IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractDynamicInfo.InteractNum - 1);
 				}
 			}
 		}
@@ -463,7 +556,28 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	BeInteractDynamicInfo.bIsComplete = false;
 	BeInteractDynamicInfo.bVerifyInteractRoleNumPass = false;
 	GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractRoleNumVerifyTimerHandle);//停止检测交互人数
-	OnInteractEnd.Broadcast(InteractComponent);
+
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractEnd.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractEnd(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractEnd(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
+
 }
 
 void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
@@ -486,7 +600,7 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	BeInteractDynamicInfo.AllInteractComponent.Empty();//清除当前跟我交互的全部组件
 
 
-	if (BeInteractInfo.bInteractNumIsSeparate)//交互次数分开记录吗
+	if (BeInteractInfo.bInteractNumIsMultiplepeople)//交互次数分开记录吗
 	{
 		if (BeInteractInfo.EveryoneInteractNumSubtractType == EIS_InteractNumSubtractType::Complete)
 		{
@@ -497,14 +611,34 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	{
 		if (BeInteractInfo.InteractNumSubtractType == EIS_InteractNumSubtractType::Complete)
 		{
-			BeInteractInfo.InteractNum--;
+			IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractDynamicInfo.InteractNum - 1);
 		}
 	}
 
-	OnInteractComplete.Broadcast(InteractComponent);
-	if (BeInteractInfo.bGenerateOverlapEvents)//如果需要生成挂载交互事件，在交互完成时才算开始
+	switch (InteractEventNetType)
 	{
-		IIS_BeInterface::Execute_InteractAttachTo(this, InteractComponent);
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractComplete.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractComplete(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractComplete(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
+
+	if (BeInteractInfo.bGenerateAttachEvents)//如果需要生成挂载交互事件，在交互完成时才算开始
+	{
+		IIS_BeInteractInterface::Execute_InteractAttachTo(this, InteractComponent);
 	}
 	else
 	{
@@ -514,25 +648,192 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 
 void UIS_BeInteractComponent::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
 {
-	OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractComplete_MultiSegment(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractComplete_MultiSegment(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
+
 }
 
 void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
 {
 	BeInteractDynamicInfo.bIsInAttach = true;
-	OnInteractAttachTo.Broadcast(InteractComponent);
+
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractAttachTo.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractAttachTo(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractAttachTo(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 void UIS_BeInteractComponent::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
 {
 	BeInteractDynamicInfo.bIsInAttach = false;
-	OnInteractAttachDetach.Broadcast(InteractComponent);
+
+	switch (InteractEventNetType)
+	{
+	case EIS_InteractEventNetType::Server:
+	{
+		OnInteractAttachDetach.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::Client:
+	{
+		NetClient_OnInteractAttachDetach(InteractComponent);
+		break;
+	}
+	case EIS_InteractEventNetType::NetMulticast:
+	{
+		NetMulti_OnInteractAttachDetach(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
+
+
 	InteractComponent->EndCurInteract();//分离时使交互组件结束交互
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractVerify_Implementation(UIS_InteractComponent* InteractComponent, UObject* VerifyObject)
+{
+	OnInteractVerify.Broadcast(InteractComponent, VerifyObject);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractVerify_Implementation(UIS_InteractComponent* InteractComponent, UObject* VerifyObject)
+{
+	OnInteractVerify.Broadcast(InteractComponent, VerifyObject);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+{
+	OnInteractEnter.Broadcast(InteractComponent, TraceType);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+{
+	OnInteractEnter.Broadcast(InteractComponent, TraceType);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+{
+	OnInteractLeave.Broadcast(InteractComponent, TraceType);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+{
+	OnInteractLeave.Broadcast(InteractComponent, TraceType);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractStart.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractStart.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractEnd.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractEnd.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractComplete.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractComplete.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractAttachTo.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractAttachTo.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetClient_OnInteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractAttachDetach.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::NetMulti_OnInteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	OnInteractAttachDetach.Broadcast(InteractComponent);
+}
+
+void UIS_BeInteractComponent::InteractTraceCheck_Implementation(EIS_InteractTraceType TraceType, bool IsEnter)
+{
+	if (IsEnter)
+	{
+		if (!BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))
+		{
+			BeInteractDynamicInfo.AllEnterTraceType.Add(TraceType);
+		}
+	}
+	else
+	{
+		BeInteractDynamicInfo.AllEnterTraceType.Remove(TraceType);
+	}
 }
 
 void UIS_BeInteractComponent::CreateVerifyUI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass)
 {
-	IIS_BeInterface::Execute_CreateVerifyObject_UI(this, InteractComponent, UIClass);
+	IIS_BeInteractInterface::Execute_CreateVerifyObject_UI(this, InteractComponent, UIClass);
 }
 
 float UIS_BeInteractComponent::GetCurInteractTimeFromRoleSign(FName RoleSign)
@@ -546,9 +847,9 @@ float UIS_BeInteractComponent::GetCurInteractTimeFromRoleSign(FName RoleSign)
 
 bool UIS_BeInteractComponent::TryInteractComplete(UIS_InteractComponent* InteractComponent)
 {
-	if (IIS_BeInterface::Execute_InteractCompleteVerifyCheck(this, InteractComponent))//交互验证
+	if (IIS_BeInteractInterface::Execute_InteractCompleteVerifyCheck(this, InteractComponent))//交互验证
 	{
-		IIS_BeInterface::Execute_InteractComplete(this, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractComplete(this, InteractComponent);
 		return true;
 	}
 	return false;
@@ -594,7 +895,7 @@ void UIS_BeInteractComponent::InteractTimerBack()
 					//BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;多段累计不归零，在Beginplay时会特殊处理
 					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval);
 					BeInteractDynamicInfo.InteractCompleteCount++;//增加累计成功次数
-					IIS_BeInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
 					if (BeInteractDynamicInfo.InteractCompleteCount >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 					{
 						TryInteractComplete(InteractComponent);
@@ -621,7 +922,7 @@ void UIS_BeInteractComponent::InteractTimerBack()
 					//不累计的多段交互是一段一段的timer，每个timer的时长是对应下标的值
 					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount]);
 					BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(),0,0.0f,1);//增加该交互者的累计成功次数
-					IIS_BeInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
 					if (BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign()) >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 					{
 						TryInteractComplete(InteractComponent);
@@ -644,7 +945,7 @@ void UIS_BeInteractComponent::InteractTimerBack()
 					BeInteractInfo.InteractTime[BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign())])
 					{
 						BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 0, 0.0f, 1);//增加该交互者的累计成功次数
-						IIS_BeInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+						IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
 						if (BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign()) >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 						{
 							TryInteractComplete(InteractComponent);
@@ -685,7 +986,7 @@ void UIS_BeInteractComponent::InteractRoleNumVerifyBack()
 {
 	if (BeInteractDynamicInfo.bVerifyInteractRoleNumPass)//如果外部还没完成交互，由该函数触发完成
 	{
-		IIS_BeInterface::Execute_InteractComplete(this, BeInteractDynamicInfo.AllInteractComponent.Last());//理应是因为最后一个人的交互导致的人数满足
+		IIS_BeInteractInterface::Execute_InteractComplete(this, BeInteractDynamicInfo.AllInteractComponent.Last());//理应是因为最后一个人的交互导致的人数满足
 	}
 
 	if (BeInteractDynamicInfo.bIsInInteract)//在交互中才需要判断
@@ -709,13 +1010,30 @@ void UIS_BeInteractComponent::InteractRoleNumVerifyBack()
 	}
 }
 
-float UIS_BeInteractComponent::Get_MSCT_NextInteractTime()
+UMeshComponent* UIS_BeInteractComponent::GetOutLineMeshCom()
 {
-	if (BeInteractDynamicInfo.InteractCompleteCount == 0)
+	if (!OutLineMeshComponnet)
 	{
-		return BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount];
+		OutLineMeshComponnet = GetOwner()->GetComponentByClass<UMeshComponent>();
 	}
-	return BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount] - BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount - 1];
+	return OutLineMeshComponnet;
+}
+
+void UIS_BeInteractComponent::ChangeOutLineCount(int32 AddOutLineNum)
+{
+	if (bIsOpenOutLine && GetOutLineMeshCom())
+	{
+		OutLineCount += AddOutLineNum;
+		if (OutLineCount > 0)
+		{
+			GetOutLineMeshCom()->SetRenderCustomDepth(true);
+			GetOutLineMeshCom()->SetCustomDepthStencilValue(CustomDepthStencilValue_OutLine);
+		}
+		else
+		{
+			GetOutLineMeshCom()->SetRenderCustomDepth(false);
+		}
+	}
 }
 
 UIS_InteractComponent* UIS_BeInteractComponent::FindCompleteInteractComponent(float BackTime)
@@ -736,3 +1054,23 @@ UIS_InteractComponent* UIS_BeInteractComponent::FindCompleteInteractComponent(fl
 	}
 	return nullptr;
 }
+
+bool UIS_BeInteractComponent::TraceTypeCheck(EIS_InteractTraceType TraceType, bool IsEnter)
+{
+	//允许该类型的检测
+	if (BeInteractInfo.InteractEnterTriggerType.Contains(TraceType))
+	{
+		//如果是进入 && 该类型没有触发过“进入”事件
+		if (IsEnter && !BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))
+		{
+			return true;
+		}
+		else if(!IsEnter && BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))//如果是离开，该类型必须先触发过“进入”事件
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+

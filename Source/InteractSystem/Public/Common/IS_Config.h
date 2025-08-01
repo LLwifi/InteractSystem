@@ -29,6 +29,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
 	TSoftClassPtr<UUserWidget> DefaultInteractTipPanelClass;
 
+	//交互描边的材质
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UMaterial> DefaultInteractOutLineMaterial;
+
 	////交互次数不足时的默认失败文本提示
 	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	//FText InteractNum_DefaultFailText;

@@ -4,7 +4,7 @@
 #include "UObject/Interface.h"
 #include "../../../../../CommonCompare/Source/CommonCompare/Public/CC_StructAndEnum.h"
 #include "../Common/IS_Config.h"
-#include "IS_BeInterface.generated.h"
+#include "IS_BeInteractInterface.generated.h"
 
 class UIS_InteractComponent;
 class UUserWidget;
@@ -56,8 +56,8 @@ UENUM(BlueprintType)
 enum class EIS_InteractNumSubtractType :uint8
 {
 	NotSubtract = 0 UMETA(DisplayName = "不扣除"),
-	Complete UMETA(DisplayName = "交互完成时扣除"),
-	End UMETA(DisplayName = "交互结束时扣除")
+	Complete UMETA(DisplayName = "交互完成时"),
+	End UMETA(DisplayName = "交互结束时")
 };
 
 //交互时间的累计类型
@@ -71,6 +71,25 @@ enum class EIS_InteractCumulativeTimeType :uint8
 	* 需要注意的是该类型只有当InteractTime的长度 > 2 时生效
 	*/
 	InteractTimeIndex UMETA(DisplayName = "按分段累计")
+};
+
+//被交互资源能被触发“进入”事件的类型
+UENUM(BlueprintType)
+enum class EIS_BeInteractEnterType :uint8
+{
+	//当检测到多个可被交互的资源时，这些资源均可触发“进入”事件
+	AnyTrigger UMETA(DisplayName = "可触发"),
+	//当检测到多个可被交互的资源时，只有交互优先级最高的资源会触发“进入”事件
+	TopPriorityTrigger UMETA(DisplayName = "最高优先级可触发")
+};
+
+//交互检测的类型
+UENUM(BlueprintType)
+enum class EIS_InteractTraceType :uint8
+{
+	None = 0 UMETA(DisplayName = "空"),
+	CameraTrace UMETA(DisplayName = "摄像机射线检测"),
+	SphereTrace UMETA(DisplayName = "球形检测")
 };
 
 /*历史被交互的信息
@@ -131,7 +150,7 @@ public:
 	FText InteractText;
 
 	//交互提示UI类
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSoftClassPtr<UUserWidget> InteractTipPanelClass = UIS_Config::GetInstance()->DefaultInteractTipPanelClass;
 	//交互方式类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -141,8 +160,12 @@ public:
 	* 退出/分离挂载需要主动调用InteractAttachDetach
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bGenerateOverlapEvents = false;
-	//交互时长
+	bool bGenerateAttachEvents = false;
+	/*交互时长
+	* 如果数组长度 > 1 则该交互视为多段交互
+	* 多段交互会在每个下标的交互时长满足时触发InteractComplete_MultiSegment
+	* 多段交互时 若交互时长累计类型（InteractCumulativeTimeType）为 多段累计（InteractTimeIndex）每当交互到了下标时长时会记录节点
+	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "InteractType != EIS_InteractType::Instant && InteractType != EIS_InteractType::AttachTo"))
 	TArray<float> InteractTime = { 1.0f };
 	/*交互时长是否允许累计
@@ -191,7 +214,7 @@ public:
 	//交互时长是否允许多人累加 可以理解为大家共同推进进度/共用一个进度条
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "InteractType != EIS_InteractType::Instant && SameTimeInteractRoleNum > 1"))
 	bool bEveryoneCumulativeTime = false;
-	//交互次数 该值为0时不允许交互
+	//初始交互次数 该值为0时不允许交互
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 InteractNum = 1;
 	//交互次数不足时的失败文本提示
@@ -200,17 +223,22 @@ public:
 	//交互次数扣除类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractNumSubtractType InteractNumSubtractType = EIS_InteractNumSubtractType::NotSubtract;
-	/*不同的交互者的交互次数是否分开记录
+	/*交互次数是否影响交互激活状态
+	* 该值为true时，交互次数 > 0设置为激活 交互次数 < 0 设置为失活
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bInteractActiveFromInteractNum = true;
+	/*不同交互者的交互次数是否分开记录
 	* 该值为true时开启功能：此时InteractNum表示被交互物体总共可以被交互的次数
 	* EveryoneInteractlNum表示每个人单独可以交互的次数
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bInteractNumIsSeparate = false;
+	bool bInteractNumIsMultiplepeople = false;
 	//每个人的交互次数
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "bInteractNumIsSeparate"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "bInteractNumIsMultiplepeople"))
 	int32 EveryoneInteractlNum = 1;
 	//每个人的交互次数扣除方式 注意：该值不应该为NotSubtract【不扣除】，不扣除本质上不需要区分每个人的交互次数
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "bInteractNumIsSeparate"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "bInteractNumIsMultiplepeople"))
 	EIS_InteractNumSubtractType EveryoneInteractNumSubtractType = EIS_InteractNumSubtractType::End;
 
 	//交互tag 用来表示类型或额外的其他信息
@@ -225,9 +253,11 @@ public:
 	//未开启交互时的的失败文本提示
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FText InteractActive_FailText;
-	//未激活时是否显示交互文本
+	/*未激活时是否显示交互文本
+	* 该选项包括移入的交互文本以及未激活的失败文本
+	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bIsNotActiveDisplayInteractText = false;
+	bool bNotActiveIsDisplayInteractText = false;
 
 	//在移出被交互物时，要不要停止交互
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -239,6 +269,17 @@ public:
 	//被比对的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FCC_BeCompareInfo BeCompareInfo;
+
+	/*相机射线能被触发进入的类型
+	* 不添加表示该类型不会触发
+	* 该Map为空时进入事件不会触发
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TMap<EIS_InteractTraceType, EIS_BeInteractEnterType> InteractEnterTriggerType;
+
+	//“我”未激活时是否能交互被检测到
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bNotActiveIsTraceCheck = false;
 };
 
 /*被交互的动态信息
@@ -252,7 +293,6 @@ public:
 	//记录交互信息
 	FIS_HistoryBeInteractInfo RecordInteractInfo(FName RoleSign, int32 AddInteractCount, float AddInteractTime, int32 AddInteractCompleteCount)
 	{
-		
 		for (FIS_HistoryBeInteractInfo& HistoryInfo : HistoryBeInteracterInfo)
 		{
 			if (HistoryInfo.InteracterRoleSign == RoleSign)
@@ -383,6 +423,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_HistoryBeInteractInfo> HistoryBeInteracterInfo;
 
+	//运行中的交互次数
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 InteractNum = 0;
+
 	/*交互总时间
 	* 在BeginPlay和修改时间时计算获得
 	* -1表示初始值
@@ -418,11 +462,17 @@ public:
 	//交互统一累计时间
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float InteractCumulativeTime = 0.0f;
+
+	/*Trace的进入离开管理
+	* 当前进入的全部检测类型
+	*/
+	UPROPERTY(BlueprintReadWrite)
+	TArray<EIS_InteractTraceType> AllEnterTraceType;
 };
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class UIS_BeInterface : public UInterface
+class UIS_BeInteractInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -430,7 +480,7 @@ class UIS_BeInterface : public UInterface
 /**
  * 可被交互单位的接口
  */
-class INTERACTSYSTEM_API IIS_BeInterface//修改名称BeInteractInterface
+class INTERACTSYSTEM_API IIS_BeInteractInterface
 {
 	GENERATED_BODY()
 
@@ -484,11 +534,19 @@ public:
 	virtual TArray<float> GetInteractTime_Implementation(float& TotalTime) { TotalTime = 1.0f;return { 1.0f }; };
 
 	/*
+	* 设置要交互时长
+	* return：总时长
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	float SetInteractTime(const TArray<float>& InteractTime);
+	virtual float SetInteractTime_Implementation(const TArray<float>& InteractTime) { return 0.0f; };
+
+	/*
 	* 获取已经交互过的时长
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	float GetAlreadyInteractTime();
-	virtual float GetAlreadyInteractTime_Implementation() { return { 0.0f }; };
+	virtual float GetAlreadyInteractTime_Implementation() { return 0.0f; };
 
 	/*
 	* 获取交互次数
@@ -496,6 +554,13 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	int32 GetInteractNum();
 	virtual int32 GetInteractNum_Implementation() { return 1; };
+
+	/*
+	* 设置交互次数
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	int32 SetInteractNum(int32 NewInteractNum);
+	virtual int32 SetInteractNum_Implementation(int32 NewInteractNum) { return NewInteractNum; };
 
 	/*
 	* 获取交互次数扣除类型
@@ -524,7 +589,7 @@ public:
 	bool SetInteractActive(bool NewActive);
 	virtual bool SetInteractActive_Implementation(bool NewActive) { return NewActive; };
 
-	//是否开启了交互
+	//是否激活了交互
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	bool IsInteractActive();
 	virtual bool IsInteractActive_Implementation() { return true; };
@@ -570,18 +635,21 @@ public:
 	/*
 	* 移入可交互目标——仅在客户端触发
 	* InteractComponent：哪个交互组件移入了“我”
+	* TraceType：进入时是因为被哪个类型检测到了
+	* TopPriority：我被触发移入时，“我”是不是交互优先级最高的对象
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractEnter(UIS_InteractComponent* InteractComponent);
-	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) {};
 
 	/*
 	* 移出可交互目标——仅在客户端触发
 	* InteractComponent：哪个交互组件移出了“我”
+	* TraceType：离开时是因为被哪个类型触发的
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractLeave(UIS_InteractComponent* InteractComponent);
-	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) {};
 
 	/*
 	* 在移出被交互物时，要不要停止交互

@@ -4,11 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/StaticMeshComponent.h"
-#include "Common/IS_BeInterface.h"
+#include "Common/IS_BeInteractInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "IS_BeInteractComponent.generated.h"
 
+class UIS_BeInteractExtendBase;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInteractDelegate, UIS_InteractComponent*, InteractComponent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractVerifyDelegate, UIS_InteractComponent*, InteractComponent, UObject*, VerifyObject);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractEnterOrLeaveDelegate, UIS_InteractComponent*, InteractComponent, EIS_InteractTraceType, TraceType);
 
 /*被交互的其他信息
 * 通常是不需要配置，可能是代码或者逻辑层面需要保存的变量
@@ -28,11 +32,20 @@ public:
 
 };
 
+//交互相关事件的网络复制决策类型
+UENUM(BlueprintType)
+enum class EIS_InteractEventNetType :uint8
+{
+	Server UMETA(DisplayName = "在服务器上运行"),
+	Client UMETA(DisplayName = "在拥有的客户端上运行"),
+	NetMulticast UMETA(DisplayName = "组播")
+};
+
 /*被交互组件：该组件描述一个可以被交互的资源的基本信息
 * 需要注意如果要进行网络同步，添加该组件的Actor也需要开启网络同步
 */
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class INTERACTSYSTEM_API UIS_BeInteractComponent : public UStaticMeshComponent, public IIS_BeInterface
+class INTERACTSYSTEM_API UIS_BeInteractComponent : public UStaticMeshComponent, public IIS_BeInteractInterface
 {
 	GENERATED_BODY()
 
@@ -63,7 +76,9 @@ public:
 	virtual int32 GetMultiInteractNum_Implementation() override;
 	virtual TArray<float> GetInteractTime_Implementation(float& TotalTime) override;
 	virtual float GetAlreadyInteractTime_Implementation() override;
+	virtual float SetInteractTime_Implementation(const TArray<float>& InteractTime) override;
 	virtual int32 GetInteractNum_Implementation() override;
+	virtual int32 SetInteractNum_Implementation(int32 NewInteractNum) override;
 	virtual EIS_InteractNumSubtractType GetInteractNumSubtractType_Implementation() override;
 	virtual FGameplayTagContainer GetInteractTag_Implementation() override;
 	virtual int32 GetInteractPriority_Implementation() override;
@@ -71,18 +86,21 @@ public:
 	virtual bool IsInteractActive_Implementation() override;
 
 	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText) override;
+	//开始进行第三方验证了
+	UPROPERTY(BlueprintAssignable)
+	FInteractVerifyDelegate OnInteractVerify;
 
 	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass) override;
-	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
 	//移入可交互目标——仅自主客户端触发该事件
 	UPROPERTY(BlueprintAssignable)
-	FInteractDelegate OnInteractEnter;
-	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent) override;
+	FInteractEnterOrLeaveDelegate OnInteractEnter;
+	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
 	//移出可交互目标——仅自主客户端触发该事件
 	UPROPERTY(BlueprintAssignable)
-	FInteractDelegate OnInteractLeave;
+	FInteractEnterOrLeaveDelegate OnInteractLeave;
 	virtual bool InteractLeaveIsEnd_Implementation() override;
 	virtual bool TryInteract_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual bool InteractCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
@@ -113,6 +131,62 @@ public:
 	FInteractDelegate OnInteractAttachDetach;
 	//-----------------------------------------------------IIS_Interface
 
+	//-----------------------------------------------------------------------------------------Net
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractVerify(UIS_InteractComponent* InteractComponent, UObject* VerifyObject);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractVerify(UIS_InteractComponent* InteractComponent, UObject* VerifyObject);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractStart(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractStart(UIS_InteractComponent* InteractComponent);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractEnd(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractEnd(UIS_InteractComponent* InteractComponent);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractComplete(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractComplete(UIS_InteractComponent* InteractComponent);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractAttachTo(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractAttachTo(UIS_InteractComponent* InteractComponent);
+
+	UFUNCTION(Client, Reliable)
+	void NetClient_OnInteractAttachDetach(UIS_InteractComponent* InteractComponent);
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulti_OnInteractAttachDetach(UIS_InteractComponent* InteractComponent);
+
+	//-----------------------------------------------------------------------------------------Net
+
+
+	/*Trace的进入和移出
+	* 该函数可能会被频繁调用
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+		void InteractTraceCheck(EIS_InteractTraceType TraceType, bool IsEnter = true);
+	virtual void InteractTraceCheck_Implementation(EIS_InteractTraceType TraceType, bool IsEnter = true);
+
 	/*创建交互验证对象——UI
 	* 需要注意的是UI只能在客户端创建
 	*/
@@ -127,7 +201,7 @@ public:
 	float GetCurInteractTimeFromRoleSign(FName RoleSign);
 
 	/*交互尝试完成，此函数被调用表示基本的交互过程已经完成
-	* 若交互验证通过则交互完成
+	* 若交互验证通过（InteractCompleteVerifyCheck）则交互完成
 	* return : 验证是否通过/是否成功调用了交互完成
 	*/
 	UFUNCTION(BlueprintCallable)
@@ -147,9 +221,13 @@ public:
 	UFUNCTION()
 	void InteractRoleNumVerifyBack();
 
-	//获取多段累计（MSCT/MultiSegmentCumulativeTime）交互下的下一次交互所需时间
-	UFUNCTION()
-	float Get_MSCT_NextInteractTime();
+	//获取描边网格
+	UFUNCTION(BlueprintPure)
+	UMeshComponent* GetOutLineMeshCom();
+
+	//改变描边计数
+	UFUNCTION(BlueprintCallable)
+	void ChangeOutLineCount(int32 AddOutLineNum);
 
 	/*在多个交互者中寻找完成交互的交互者
 	* BackTime：回调的时间
@@ -157,7 +235,36 @@ public:
 	UFUNCTION()
 	UIS_InteractComponent* FindCompleteInteractComponent(float BackTime);
 
+	/*检测类型是否通过 允许该类型的检测且没有触发过“进入”事件时才会返回true
+	* BeInteractInfo.InteractEnterTriggerType 不包含该类型表示不接受该类型的检测
+	* IsEnter：这次判断是进入还是离开
+	* 该值为true时，表示进入——BeInteractDynamicInfo.AllEnterTraceType 未包含该类型表示该类型可以触发“进入”事件
+	* 该值为false时，表示离开——BeInteractDynamicInfo.AllEnterTraceType 包含该类型表示该类型可以触发“离开”事件
+	*/
+	UFUNCTION(BlueprintPure)
+	bool TraceTypeCheck(EIS_InteractTraceType TraceType, bool IsEnter = true);
+
 public:
+	/*交互相关事件的网络复制决策
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractEventNetType InteractEventNetType = EIS_InteractEventNetType::Server;
+	
+	/*是否开启描边
+	* 开启后在移入该被交互组件时描边计数+1，在移出该被交互组件时描边计数-1+
+	* 当描边计数 > 0时，显示描边
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine")
+	bool bIsOpenOutLine;
+	//描边计数
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
+	int32 OutLineCount = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
+	int32 CustomDepthStencilValue_OutLine = 255;
+	//描边网格组件
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
+	UMeshComponent* OutLineMeshComponnet;
+
 	//被交互的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FIS_BeInteractInfo BeInteractInfo;
@@ -180,4 +287,9 @@ public:
 	//不同交互者的不同累计时间，由于Map不可复制，该值仅在服务器上存在
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 	TMap<FName,float> ServerInteracterCumulativeTime;
+
+	//全部扩展组件
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+	TArray<UIS_BeInteractExtendBase*> AllExtendComponent;
+	
 };
