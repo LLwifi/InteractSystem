@@ -33,6 +33,22 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UMaterial> DefaultInteractOutLineMaterial;
 
+	//默认交互动作
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite)
+	TMap<FName, TSoftObjectPtr<UAnimMontage>> DefaultBeInteractMontage = {{FName("Default"),nullptr}};
+
+	//交互音效
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite)
+	TMap<FName, TSoftObjectPtr<USoundBase>> DefaultBeInteractSound = { {FName("Default"),nullptr} };
+
+	//交互配置表
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UDataTable> BeInteractInfoDataTable;
+
+	//交互扩展配置表
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UDataTable> BeInteractExtendDataTable;
+
 	////交互次数不足时的默认失败文本提示
 	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	//FText InteractNum_DefaultFailText;

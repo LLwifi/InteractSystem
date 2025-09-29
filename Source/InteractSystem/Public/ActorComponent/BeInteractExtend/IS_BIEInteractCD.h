@@ -50,15 +50,15 @@ public:
 /**可被交互物的功能扩展——冷却
  * 
  */
-UCLASS()
+UCLASS(Blueprintable, BlueprintType)
 class INTERACTSYSTEM_API UIS_BIEInteractCD : public UIS_BeInteractExtendBase
 {
 	GENERATED_BODY()
 	
 public:
-	virtual void LinkInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
-	virtual void LinkInteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual void LinkInteractComplete_Implementation(UIS_InteractComponent* InteractComponent) override;
+	//virtual void LinkInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
+	//virtual void LinkInteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
+	//virtual void LinkInteractComplete_Implementation(UIS_InteractComponent* InteractComponent) override;
 
 	//设置CD
 
@@ -67,6 +67,7 @@ public:
 	void EnterCD();
 
 	//改变交互次数
+
 
 	UFUNCTION()
 	void CDTimerBack();

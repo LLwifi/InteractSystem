@@ -96,7 +96,7 @@ public:
 
 	//处理射线命中的全部交互组件
 	UFUNCTION()
-	TArray<UIS_BeInteractComponent*> TraceOutHitCheck(FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom);
+	TArray<UIS_BeInteractComponent*> TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom);
 
 	/*通过检测类型获取当前交互检测组件
 	* InteractTraceType：检测类型，该值为None时对比当前全部的可被交互组件
@@ -158,10 +158,20 @@ public:
 	UFUNCTION(BlueprintCallable, Server, Reliable)
 	void ServerVerifyCurInteractEnd();
 
+	/*离开当前交互检测的目标
+	* 离开需要触发交互结束，因此离开需要在服务器上被调用
+	*/
+	UFUNCTION(BlueprintCallable, Server, Reliable)
+	void ServerLeaveInteractCheck(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType InteractTraceType);
+
 public:
 	//该Actor的角色签名（角色唯一标识-通常是ID/或者玩家ID
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FName RoleSign = "None";
+
+	//交互失败音效
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSoftObjectPtr<USoundBase> InteractFailSound;
 
 	//射线的距离
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")

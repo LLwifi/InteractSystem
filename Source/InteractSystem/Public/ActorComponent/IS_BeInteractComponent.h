@@ -29,7 +29,6 @@ public:
 	//验证人数的Timer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FTimerHandle InteractRoleNumVerifyTimerHandle;
-
 };
 
 //交互相关事件的网络复制决策类型
@@ -43,6 +42,7 @@ enum class EIS_InteractEventNetType :uint8
 
 /*被交互组件：该组件描述一个可以被交互的资源的基本信息
 * 需要注意如果要进行网络同步，添加该组件的Actor也需要开启网络同步
+* 待解决问题：扩展完全由外部管理的开始-结束-完成	交互CD	交互锁定		交互选择/多选		交互速度
 */
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class INTERACTSYSTEM_API UIS_BeInteractComponent : public UStaticMeshComponent, public IIS_BeInteractInterface
@@ -59,10 +59,12 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
+	virtual bool ReplicateSubobjects(class UActorChannel* Channel, class FOutBunch* Bunch, FReplicationFlags* RepFlags) override;
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
-
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -89,6 +91,8 @@ public:
 	//开始进行第三方验证了
 	UPROPERTY(BlueprintAssignable)
 	FInteractVerifyDelegate OnInteractVerify;
+
+	virtual FIS_InteractCompleteVerifyInfo SetInteractCompleteVerifyInfo_Implementation(FIS_InteractCompleteVerifyInfo NewInteractCompleteVerifyInfo) override;
 
 	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent) override;
@@ -178,7 +182,23 @@ public:
 	void NetMulti_OnInteractAttachDetach(UIS_InteractComponent* InteractComponent);
 
 	//-----------------------------------------------------------------------------------------Net
+	/*通过配置名称获取蒙太奇
+	* return : -1表示未成功获取
+	*/
+	UFUNCTION(BlueprintPure)
+	UAnimMontage* GetMontageFromKeyName(FName KeyName = FName("Default"));
 
+	/*通过片段下标获取交互蒙太奇某段动画的时长
+	* return : -1表示未成功获取
+	*/
+	UFUNCTION(BlueprintPure)
+	float GetInteractMontageSectionLengthFromIndex(UAnimMontage* Montage, int32 SectionIndex);
+
+	/*通过片段名称获取交互蒙太奇某段动画的时长
+	* return : -1表示未成功获取
+	*/
+	UFUNCTION(BlueprintPure)
+	float GetInteractMontageSectionLengthFromName(UAnimMontage* Montage, FName SectionName);
 
 	/*Trace的进入和移出
 	* 该函数可能会被频繁调用
@@ -221,14 +241,6 @@ public:
 	UFUNCTION()
 	void InteractRoleNumVerifyBack();
 
-	//获取描边网格
-	UFUNCTION(BlueprintPure)
-	UMeshComponent* GetOutLineMeshCom();
-
-	//改变描边计数
-	UFUNCTION(BlueprintCallable)
-	void ChangeOutLineCount(int32 AddOutLineNum);
-
 	/*在多个交互者中寻找完成交互的交互者
 	* BackTime：回调的时间
 	*/
@@ -244,26 +256,32 @@ public:
 	UFUNCTION(BlueprintPure)
 	bool TraceTypeCheck(EIS_InteractTraceType TraceType, bool IsEnter = true);
 
+	//检测全部扩展类是否允许交互
+	UFUNCTION(BlueprintPure)
+	bool CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText);
 public:
 	/*交互相关事件的网络复制决策
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractEventNetType InteractEventNetType = EIS_InteractEventNetType::Server;
-	
-	/*是否开启描边
-	* 开启后在移入该被交互组件时描边计数+1，在移出该被交互组件时描边计数-1+
-	* 当描边计数 > 0时，显示描边
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
+	bool bIsUseDataTable;
+	//被交互信息是否读取数据表
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsUseDataTable"))
+	FIS_BeInteractInfoHandle BeInteractInfoHandle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
+	bool bIsOverrideBeInteractExtend;
+	/*被交互扩展信息是否需要重载
+	* 开始该选项后最终的扩展由该值
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine")
-	bool bIsOpenOutLine;
-	//描边计数
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
-	int32 OutLineCount = 0;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
-	int32 CustomDepthStencilValue_OutLine = 255;
-	//描边网格组件
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OutLine", meta = (EditCondition = "bIsOpenOutLine"))
-	UMeshComponent* OutLineMeshComponnet;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsOverrideBeInteractExtend"))
+	TArray<FIS_BeInteractExtendHandle> OverrideBeInteractExtendHandles;
+
+	//额外添加的扩展
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FIS_BeInteractExtendHandle> AddBeInteractExtendHandles;
 
 	//被交互的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -276,7 +294,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	AActor* SceneActorPickup;
 
-	//被交互的信息
+	//被交互的动态信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	FIS_BeInteractDynamicInfo BeInteractDynamicInfo;
 
@@ -288,8 +306,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 	TMap<FName,float> ServerInteracterCumulativeTime;
 
-	//全部扩展组件
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
-	TArray<UIS_BeInteractExtendBase*> AllExtendComponent;
+	//全部扩展
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Replicated)
+	TArray<UIS_BeInteractExtendBase*> AllExtend;
 	
 };

@@ -1,42 +1,50 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
+#include "Common/IS_BeInteractInterface.h"
+#include "Net/UnrealNetwork.h"
 #include "IS_BeInteractExtendBase.generated.h"
 
-/*¿É±»½»»¥ÎïµÄÀ©Õ¹»ùÀà
-* »áÏòOwnerÑ°ÕÒÈÎÒâ°üº¬×ÔÉíComponentTagµÄUIS_BeInteractComponent×é¼ş
+class UIS_BeInteractComponent;
+
+/*å¯è¢«äº¤äº’ç‰©çš„æ‰©å±•åŸºç±»
+* è¯¥ç±»ä¸»è¦æ˜¯ç»‘å®šå¯è¢«äº¤äº’ç»„ä»¶çš„å„ä¸ªæ—¶æœºäº‹ä»¶
 */
-UCLASS(Blueprintable, BlueprintType, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class INTERACTSYSTEM_API UIS_BeInteractExtendBase : public UActorComponent
+UCLASS(Blueprintable, EditInlineNew, BlueprintType)
+class INTERACTSYSTEM_API UIS_BeInteractExtendBase : public UObject , public IIS_BeInteractInterface
 {
 	GENERATED_BODY()
 
 public:	
-	// Sets default values for this component's properties
 	UIS_BeInteractExtendBase();
 
-protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
+	virtual UWorld* GetWorld() const override;
 
-public:	
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual bool IsSupportedForNetworking() const override;
 
+	//åˆå§‹åŒ–
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void LinkInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
-	virtual void LinkInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	void Init(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);
+	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void LinkInteractEnd(UIS_InteractComponent* InteractComponent);
-	virtual void LinkInteractEnd_Implementation(UIS_InteractComponent* InteractComponent);
+	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText) override;
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void LinkInteractComplete(UIS_InteractComponent* InteractComponent);
-	virtual void LinkInteractComplete_Implementation(UIS_InteractComponent* InteractComponent);
+	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
+	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
+	virtual bool InteractLeaveIsEnd_Implementation() override;
+	virtual bool TryInteract_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual bool InteractCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent) override;
 
 public:
+	//æ­£åœ¨ä½¿ç”¨è¯¥æ‰©å±•çš„ã€å¯è¢«äº¤äº’ç»„ä»¶ã€‘
+	UPROPERTY(BlueprintReadWrite)
+	UIS_BeInteractComponent* BeInteractComponent;
 };

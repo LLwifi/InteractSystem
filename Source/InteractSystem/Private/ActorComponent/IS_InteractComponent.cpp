@@ -106,19 +106,49 @@ void UIS_InteractComponent::EndCurInteract()
 	}
 }
 
-TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceOutHitCheck(FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom)
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom)
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
 	for (const FHitResult& HitResult : OutHit)
 	{
 		UIS_BeInteractComponent* BeInteractComponent = Cast<UIS_BeInteractComponent>(HitResult.GetComponent());
-		if (BeInteractComponent && (!BeInteractComponent->BeInteractInfo.bNotActiveIsTraceCheck ? IIS_BeInteractInterface::Execute_IsInteractActive(BeInteractComponent) : true))
+		if (BeInteractComponent)
 		{
-			AllBeInteract.Add(BeInteractComponent);
-			if (!TopPriorityCom || //为空直接设置
-				IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
+			bool IsCheck = false;
+			FText FailText;
+			if (BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition.Contains(InteractTraceType))
 			{
-				TopPriorityCom = BeInteractComponent;
+				IsCheck = true;
+				FIS_BeInteractCheckCondition Condition = BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition[InteractTraceType];
+				if (Condition.bIsActiveTraceCheck)
+				{
+					IsCheck = IIS_BeInteractInterface::Execute_IsInteractActive(BeInteractComponent);
+				}
+				if (IsCheck && Condition.bIsVerifyTraceCheck)//是否开启了验证
+				{
+					if(IsCheck && Condition.bIsDistanceVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractDistanceVerify)//是否有距离验证，且被交互目标配置了距离验证
+					{
+						IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.DistanceVerify(this, BeInteractComponent, FailText);
+					}
+					if (IsCheck && Condition.bIsAngleVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractAngleVerify)//是否有角度验证，且被交互目标配置了角度验证
+					{
+						IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.AngleVerify(this, BeInteractComponent, FailText);
+					}
+				}
+				if (IsCheck && Condition.bIsCompareTraceCheck)
+				{
+					IsCheck = BeInteractComponent->BeInteractInfo.BeCompareInfo.CompareResult(DefaultCompareInfo, FailText);
+				}
+			}
+
+			if (IsCheck)
+			{
+				AllBeInteract.Add(BeInteractComponent);
+				if (!TopPriorityCom || //为空直接设置
+					IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
+				{
+					TopPriorityCom = BeInteractComponent;
+				}
 			}
 		}
 	}
@@ -159,14 +189,14 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteract
 		//如果考虑模糊处理，这里可以使用圆形的射线
 		TArray<FHitResult> OutHit;
 		UKismetSystemLibrary::LineTraceMulti(this, CameraLocation, TraceEndLocation, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
-		AllBeInteract = TraceOutHitCheck(InteractRayInfo, OutHit, TopPriorityCom);
+		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::CameraTrace, InteractRayInfo, OutHit, TopPriorityCom);
 	}
 	return AllBeInteract;
 }
 
 bool UIS_InteractComponent::TryTriggerInteract_CameraTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
-	InteractCheck();
+	//InteractCheck();//这里调用该函数 在网络复制下会导致其他端同步了进入的检测类型，然后若其他端没有移入该可被交互物，其他端会触发【离开】事件 又由【离开】事件触发结束交互
 	bool ReturnBool = false;
 	AllBeInteract = CameraTraceGetBeInteractCom(InteractRayInfo, TopPriorityCom);
 	if (TopPriorityCom && IIS_BeInteractInterface::Execute_CanInteract(TopPriorityCom, this, CompareInfo, FailText))
@@ -193,14 +223,14 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteract
 		//如果考虑模糊处理，这里可以使用圆形的射线
 		TArray<FHitResult> OutHit;
 		UKismetSystemLibrary::SphereTraceMulti(this, Start, End, Radius, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
-		AllBeInteract = TraceOutHitCheck(InteractRayInfo, OutHit, TopPriorityCom);
+		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::SphereTrace, InteractRayInfo, OutHit, TopPriorityCom);
 	}
 	return AllBeInteract;
 }
 
 bool UIS_InteractComponent::TryTriggerInteract_SphereTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, FVector Start, FVector End, float Radius, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
-	InteractCheck();
+	//InteractCheck();//这里调用该函数 在网络复制下会导致其他端同步了进入的检测类型，然后若其他端没有移入该可被交互物，其他端会触发【离开】事件 又由【离开】事件触发结束交互
 	bool ReturnBool = false;
 	AllBeInteract = SphereTraceGetBeInteractCom(Start, End, Radius, InteractRayInfo, TopPriorityCom);
 	if (TopPriorityCom && IIS_BeInteractInterface::Execute_CanInteract(TopPriorityCom, this, CompareInfo, FailText))
@@ -259,12 +289,13 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractCheckFromEnterTy
 	TArray<UIS_BeInteractComponent*> LastInteractCheckComponents = InteractCheckComponents;
 	for (UIS_BeInteractComponent*& BeInteractCom : LastInteractCheckComponents)
 	{
-		//曾经进入的交互组件还在不在新一批的交互组件中 && 检测类型是否通过
-		if (!AllBeInteractCom.Contains(BeInteractCom) && BeInteractCom->TraceTypeCheck(InteractTraceType, false))
+		//BeInteractCom有效（拾取道具会在交互后删除目标） && 曾经进入的交互组件还在不在新一批的交互组件中 && 检测类型是否通过
+		if (BeInteractCom && !AllBeInteractCom.Contains(BeInteractCom) && BeInteractCom->TraceTypeCheck(InteractTraceType, false))
 		{
-			//不在，触发离开事件
-			IIS_BeInteractInterface::Execute_InteractLeave(BeInteractCom, this, InteractTraceType);//移出旧交互目标
-			UpdateInteractTarget(nullptr, InteractTraceType);
+			//不在，触发离开事件 离开需要触发交互结束，因此离开需要在服务器上被调用
+			ServerLeaveInteractCheck(BeInteractCom, InteractTraceType);
+			IIS_BeInteractInterface::Execute_InteractLeave(BeInteractCom, this, InteractTraceType);//客户端仍然需要移除该检测类型
+			UpdateInteractTarget(nullptr, InteractTraceType);//广播交互事件
 		}
 	}
 
@@ -272,21 +303,22 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractCheckFromEnterTy
 	{
 		if (BeInteractCom->TraceTypeCheck(InteractTraceType))
 		{
-			EIS_BeInteractEnterType BeInteractEnterType = BeInteractCom->BeInteractInfo.InteractEnterTriggerType[InteractTraceType];
+			FIS_BeInteractCheckCondition Condition = BeInteractCom->BeInteractInfo.InteractCheckEnterCondition[InteractTraceType];
+			EIS_BeInteractCheckType BeInteractEnterType = Condition.InteractCheckType;
 			switch (BeInteractEnterType)//不在，尝试触发进入事件
 			{
-			case EIS_BeInteractEnterType::AnyTrigger:
+			case EIS_BeInteractCheckType::AnyTrigger:
 			{
 				IIS_BeInteractInterface::Execute_InteractEnter(BeInteractCom, this, InteractTraceType);//移入新交互目标
-				UpdateInteractTarget(BeInteractCom, InteractTraceType);
+				UpdateInteractTarget(BeInteractCom, InteractTraceType);//广播交互事件
 				break;
 			}
-			case EIS_BeInteractEnterType::TopPriorityTrigger:
+			case EIS_BeInteractCheckType::TopPriorityTrigger:
 			{
 				if (TopPriorityCom == BeInteractCom)
 				{
 					IIS_BeInteractInterface::Execute_InteractEnter(BeInteractCom, this, InteractTraceType);//移入新交互目标
-					UpdateInteractTarget(BeInteractCom, InteractTraceType);
+					UpdateInteractTarget(BeInteractCom, InteractTraceType);//广播交互事件
 				}
 				break;
 			}
@@ -297,6 +329,11 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractCheckFromEnterTy
 	}
 
 	return AllBeInteractCom;
+}
+
+void UIS_InteractComponent::UpdateInteractTarget_Implementation(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType TraceType)
+{
+	UpdateInteractEvent.Broadcast(this, BeInteractComponent, TraceType);
 }
 
 void UIS_InteractComponent::ServerVerifyCurInteractComplete_Implementation()
@@ -316,7 +353,10 @@ void UIS_InteractComponent::ServerVerifyCurInteractEnd_Implementation()
 	}
 }
 
-void UIS_InteractComponent::UpdateInteractTarget_Implementation(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType TraceType)
+void UIS_InteractComponent::ServerLeaveInteractCheck_Implementation(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType InteractTraceType)
 {
-	UpdateInteractEvent.Broadcast(this, BeInteractComponent, TraceType);
+	if (BeInteractComponent)
+	{
+		IIS_BeInteractInterface::Execute_InteractLeave(BeInteractComponent, this, InteractTraceType);//移出旧交互目标
+	}
 }

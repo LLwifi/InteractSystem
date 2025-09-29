@@ -8,61 +8,88 @@
 // Sets default values for this component's properties
 UIS_BeInteractExtendBase::UIS_BeInteractExtendBase()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
 }
 
-
-// Called when the game starts
-void UIS_BeInteractExtendBase::BeginPlay()
+UWorld* UIS_BeInteractExtendBase::GetWorld() const
 {
-	Super::BeginPlay();
-
-	// ...
-	for (FName& Tag : ComponentTags)
+	UObject* outer = GetOuter();
+	if (outer && (outer->IsA<AActor>() || outer->IsA<UActorComponent>() || outer->IsA<USubsystem>()) && !outer->HasAnyFlags(RF_ClassDefaultObject))
 	{
-		TArray<UActorComponent*> AllActorCom = GetOwner()->GetComponentsByTag(UIS_BeInteractComponent::StaticClass(), Tag);
-		for (UActorComponent*& ActorCom : AllActorCom)
-		{
-			UIS_BeInteractComponent* BeInteractCom = Cast<UIS_BeInteractComponent>(ActorCom);
-			if (BeInteractCom)
-			{
-				BeInteractCom->AllExtendComponent.Add(this);
-				FScriptDelegate ScriptDelegate;
-				ScriptDelegate.BindUFunction(this,"LinkInteractEnter");
-				BeInteractCom->OnInteractEnter.Add(ScriptDelegate);
-				ScriptDelegate.BindUFunction(this, "LinkInteractEnd");
-				BeInteractCom->OnInteractEnd.Add(ScriptDelegate);
-				ScriptDelegate.BindUFunction(this, "LinkInteractComplete");
-				BeInteractCom->OnInteractComplete.Add(ScriptDelegate);
-			}
-		}
+		return outer->GetWorld();
 	}
+	return nullptr;
 }
 
-
-// Called every frame
-void UIS_BeInteractExtendBase::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+bool UIS_BeInteractExtendBase::IsSupportedForNetworking() const
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
+	return true;
 }
 
-void UIS_BeInteractExtendBase::LinkInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractExtendBase::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
 {
-	
+	BeInteractComponent = BeInteractCom;
+	//if (BeInteractComponent)
+	//{
+	//	BeInteractCom->AllExtendComponent.Add(this);
+	//	FScriptDelegate ScriptDelegate;
+	//	ScriptDelegate.BindUFunction(this, "InteractEnter");
+	//	BeInteractCom->OnInteractEnter.Add(ScriptDelegate);
+	//	ScriptDelegate.BindUFunction(this, "InteractEnd");
+	//	BeInteractCom->OnInteractEnd.Add(ScriptDelegate);
+	//	ScriptDelegate.BindUFunction(this, "InteractComplete");
+	//	BeInteractCom->OnInteractComplete.Add(ScriptDelegate);
+	//}
 }
 
-void UIS_BeInteractExtendBase::LinkInteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+bool UIS_BeInteractExtendBase::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
+{
+	return true;
+}
+
+void UIS_BeInteractExtendBase::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
 }
 
-void UIS_BeInteractExtendBase::LinkInteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractExtendBase::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
+}
 
+bool UIS_BeInteractExtendBase::InteractLeaveIsEnd_Implementation()
+{
+	return false;
+}
+
+bool UIS_BeInteractExtendBase::TryInteract_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	return false;
+}
+
+bool UIS_BeInteractExtendBase::InteractCheck_Implementation(UIS_InteractComponent* InteractComponent)
+{
+	return false;
+}
+
+void UIS_BeInteractExtendBase::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+{
+}
+
+void UIS_BeInteractExtendBase::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+{
+}
+
+void UIS_BeInteractExtendBase::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+{
+}
+
+void UIS_BeInteractExtendBase::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
+{
+}
+
+void UIS_BeInteractExtendBase::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
+{
+}
+
+void UIS_BeInteractExtendBase::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
+{
 }
 
