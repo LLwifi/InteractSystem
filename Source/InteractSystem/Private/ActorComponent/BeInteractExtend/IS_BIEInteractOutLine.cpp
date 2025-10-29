@@ -8,7 +8,6 @@ void UIS_BIEInteractOutLine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UIS_BIEInteractOutLine, FindOutLineMeshComponnetTag);
 	DOREPLIFETIME(UIS_BIEInteractOutLine, CustomDepthStencilValue_OutLine);
 	DOREPLIFETIME(UIS_BIEInteractOutLine, EnterInteractTraceType);
 	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineMeshComponnets);
@@ -18,28 +17,19 @@ void UIS_BIEInteractOutLine::Init_Implementation(UIS_BeInteractComponent* BeInte
 {
 	Super::Init_Implementation(BeInteractCom, Data);
 
-	UIS_BIEInteractOutLine* OutLine = Cast<UIS_BIEInteractOutLine>(Data);
-	if(OutLine)
+	UIS_BIEInteractOutLine* DataCom = Cast<UIS_BIEInteractOutLine>(Data);
+	if(DataCom)
 	{
-		FindOutLineMeshComponnetTag = OutLine->FindOutLineMeshComponnetTag;
-		CustomDepthStencilValue_OutLine = OutLine->CustomDepthStencilValue_OutLine;
-		EnterInteractTraceType = OutLine->EnterInteractTraceType;
+		CustomDepthStencilValue_OutLine = DataCom->CustomDepthStencilValue_OutLine;
+		EnterInteractTraceType = DataCom->EnterInteractTraceType;
 	}
 
-	if (BeInteractComponent)
+	for (UActorComponent*& ActorCom : GetComponent())
 	{
-		if (FindOutLineMeshComponnetTag.IsNone())//如果没有指定tag，那么寻找全部的mesh组件
+		UPrimitiveComponent* PrimitiveCom = Cast<UPrimitiveComponent>(ActorCom);
+		if (PrimitiveCom)
 		{
-			BeInteractComponent->GetOwner()->GetComponents<UMeshComponent>(OutLineMeshComponnets);
-		}
-		else
-		{
-			TArray<UActorComponent*> AllComponnets;
-			AllComponnets = BeInteractComponent->GetOwner()->GetComponentsByTag(UMeshComponent::StaticClass(), FindOutLineMeshComponnetTag);
-			for (UActorComponent*& Com : AllComponnets)
-			{
-				OutLineMeshComponnets.Add(Cast<UMeshComponent>(Com));
-			}
+			OutLineMeshComponnets.Add(PrimitiveCom);
 		}
 	}
 }
@@ -128,7 +118,7 @@ int32 UIS_BIEInteractOutLine::ChangeOutLineCount(int32 AddOutLineNum)
 		OutLineCount += AddOutLineNum;
 		if (OutLineCount > 0)
 		{
-			for (UMeshComponent*& Com : OutLineMeshComponnets)
+			for (UPrimitiveComponent*& Com : OutLineMeshComponnets)
 			{
 				if (Com)
 				{
@@ -139,7 +129,7 @@ int32 UIS_BIEInteractOutLine::ChangeOutLineCount(int32 AddOutLineNum)
 		}
 		else
 		{
-			for (UMeshComponent*& Com : OutLineMeshComponnets)
+			for (UPrimitiveComponent*& Com : OutLineMeshComponnets)
 			{
 				if (Com)
 				{

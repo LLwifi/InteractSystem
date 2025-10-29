@@ -10,7 +10,7 @@
 class UIS_BeInteractComponent;
 
 /*可被交互物的扩展基类
-* 该类主要是绑定可被交互组件的各个时机事件
+* 通常由UIS_BeInteractComponent 组件创建，相关的IIS_BeInteractInterface接口函数也会被UIS_BeInteractComponent同步在同名函数中调用
 */
 UCLASS(Blueprintable, EditInlineNew, BlueprintType)
 class INTERACTSYSTEM_API UIS_BeInteractExtendBase : public UObject , public IIS_BeInteractInterface
@@ -24,7 +24,10 @@ public:
 
 	virtual bool IsSupportedForNetworking() const override;
 
-	//初始化
+	/*初始化 通常由UIS_BeInteractComponent 组件创建时调用
+	* BeInteractCom：哪个被交互组件创建的“我”
+	* Data：初始化使用的数据表里的配置（与自身是一个类型）需要使用该数据初始化自身
+	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	void Init(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);
 	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);

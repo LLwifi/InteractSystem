@@ -28,17 +28,6 @@ bool UIS_BeInteractExtendBase::IsSupportedForNetworking() const
 void UIS_BeInteractExtendBase::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
 {
 	BeInteractComponent = BeInteractCom;
-	//if (BeInteractComponent)
-	//{
-	//	BeInteractCom->AllExtendComponent.Add(this);
-	//	FScriptDelegate ScriptDelegate;
-	//	ScriptDelegate.BindUFunction(this, "InteractEnter");
-	//	BeInteractCom->OnInteractEnter.Add(ScriptDelegate);
-	//	ScriptDelegate.BindUFunction(this, "InteractEnd");
-	//	BeInteractCom->OnInteractEnd.Add(ScriptDelegate);
-	//	ScriptDelegate.BindUFunction(this, "InteractComplete");
-	//	BeInteractCom->OnInteractComplete.Add(ScriptDelegate);
-	//}
 }
 
 bool UIS_BeInteractExtendBase::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)

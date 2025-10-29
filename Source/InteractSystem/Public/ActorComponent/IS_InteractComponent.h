@@ -216,13 +216,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable)
 	FIS_InteractEvent UpdateInteractEvent;
-	//UPROPERTY(BlueprintAssignable)
-	//FTaskComponentDelegate TaskEndEvent;
 
 	//当前正在交互中的目标 通常是交互优先级最大的目标
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Replicated)
 	UIS_BeInteractComponent* CurStartInteractComponent;
-
 
 	//默认对比信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

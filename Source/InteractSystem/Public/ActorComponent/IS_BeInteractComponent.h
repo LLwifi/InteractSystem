@@ -74,6 +74,7 @@ public:
 	virtual FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo_Implementation() override;
 	virtual bool IsDisplayInteractText_Implementation() override;
 	virtual FText GetInteractText_Implementation() override;
+	virtual void SetInteractText_Implementation(const FText& InteractText) override;
 	virtual EIS_InteractType GetInteractType_Implementation() override;
 	virtual int32 GetMultiInteractNum_Implementation() override;
 	virtual TArray<float> GetInteractTime_Implementation(float& TotalTime) override;

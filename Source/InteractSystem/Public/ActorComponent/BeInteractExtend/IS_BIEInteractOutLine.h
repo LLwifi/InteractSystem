@@ -3,14 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ActorComponent/BeInteractExtend/IS_BeInteractExtendBase.h"
+#include "ActorComponent/BeInteractExtend/IS_BIEGetComponent.h"
 #include "IS_BIEInteractOutLine.generated.h"
 
 /**可被交互物的功能扩展——描边
- * 
+ * 该功能的作用受限于后期材质，必现要场景中有描边后期该组件设置的参数才有意义
  */
 UCLASS()
-class INTERACTSYSTEM_API UIS_BIEInteractOutLine : public UIS_BeInteractExtendBase
+class INTERACTSYSTEM_API UIS_BIEInteractOutLine : public UIS_BIEGetComponent
 {
 	GENERATED_BODY()
 	
@@ -40,12 +40,6 @@ public:
 	UFUNCTION(BlueprintCallable)
 	int32 ChangeOutLineCount(int32 AddOutLineNum);
 public:
-	/*要描边的网格组件Tag标记
-	* 会根据该值查找可被交互物身上带有该Tag的网格组件进行描边
-	* 如果该值为空，那么会直接寻找全部网格组件
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
-	FName FindOutLineMeshComponnetTag;
 	/*描边计数
 	* 开启后在移入该被交互组件时描边计数+1，在移出该被交互组件时描边计数-1
 	* 当描边计数 > 0时，显示描边
@@ -56,7 +50,7 @@ public:
 	int32 CustomDepthStencilValue_OutLine = 255;
 	//描边网格组件
 	UPROPERTY(BlueprintReadWrite, Replicated)
-	TArray<UMeshComponent*> OutLineMeshComponnets;
+	TArray<UPrimitiveComponent*> OutLineMeshComponnets;
 
 	//哪些检测类型在进入的时候需要开启描边
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)

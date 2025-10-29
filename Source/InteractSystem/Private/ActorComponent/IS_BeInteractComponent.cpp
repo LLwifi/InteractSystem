@@ -144,6 +144,11 @@ FText UIS_BeInteractComponent::GetInteractText_Implementation()
 	return BeInteractInfo.InteractText;
 }
 
+void UIS_BeInteractComponent::SetInteractText_Implementation(const FText& InteractText)
+{
+	BeInteractInfo.InteractText = InteractText;
+}
+
 EIS_InteractType UIS_BeInteractComponent::GetInteractType_Implementation()
 {
 	return BeInteractInfo.InteractType;
@@ -251,7 +256,7 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 		}
 		if (IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0 && IsRoleHaveInteractNum)//交互次数是否足够
 		{
-			if (BeInteractDynamicInfo.AllInteractComponent.Num() < BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
+			if (BeInteractDynamicInfo.AllInteractComponent.Num() <= BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 			{
 				if (BeInteractInfo.InteractVerifyInfo.Verify(InteractComponent, this, FailText))//交互验证
 				{

@@ -72,6 +72,12 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 		FText GetInteractText();
 	virtual FText GetInteractText_Implementation(){ return FText(); };
+	/*
+	* 设置交互显示文本
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void SetInteractText(const FText& InteractText);
+	virtual void SetInteractText_Implementation(const FText& InteractText) {};
 
 	/*
 	* 获取交互类型
