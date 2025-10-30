@@ -53,16 +53,6 @@ bool UIS_BIEInteractOutLine::InteractLeaveIsEnd_Implementation()
 	return false;
 }
 
-bool UIS_BIEInteractOutLine::TryInteract_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	return false;
-}
-
-bool UIS_BIEInteractOutLine::InteractCheck_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	return false;
-}
-
 void UIS_BIEInteractOutLine::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
 {
 }

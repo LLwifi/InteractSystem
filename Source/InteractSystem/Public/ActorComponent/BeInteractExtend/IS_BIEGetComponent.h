@@ -33,6 +33,10 @@ public:
 	//通过接口类型获取组件
 	UFUNCTION(BlueprintPure)
 	TArray<UActorComponent*> GetComponentFromInterface();
+
+	//判断额外条件
+	UFUNCTION(BlueprintCallable)
+	void ComponentConditionCheck(TArray<UActorComponent*> Components);
 	
 public:
 	/*需要获取的组件数量 <=0 表示获取全部
@@ -54,6 +58,13 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FName> Tag;
+
+	/*获取给定插槽名称的组件
+	* 额外判定项，在使用Interface或ComponentClass获取到组件后再判断插槽名称是否为该值（有任意一个即可）
+	* 需要注意的是只有SceneComponent组件才有Scoket
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FName> SocketName;
 
 	UPROPERTY(BlueprintReadWrite)
 	TArray<UActorComponent*> AllComponents;

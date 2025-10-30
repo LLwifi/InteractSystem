@@ -37,8 +37,6 @@ public:
 	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
 	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
 	virtual bool InteractLeaveIsEnd_Implementation() override;
-	virtual bool TryInteract_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual bool InteractCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent) override;

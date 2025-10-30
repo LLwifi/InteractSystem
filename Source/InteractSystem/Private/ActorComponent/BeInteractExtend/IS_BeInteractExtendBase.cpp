@@ -48,16 +48,6 @@ bool UIS_BeInteractExtendBase::InteractLeaveIsEnd_Implementation()
 	return false;
 }
 
-bool UIS_BeInteractExtendBase::TryInteract_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	return false;
-}
-
-bool UIS_BeInteractExtendBase::InteractCheck_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	return false;
-}
-
 void UIS_BeInteractExtendBase::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
 {
 }

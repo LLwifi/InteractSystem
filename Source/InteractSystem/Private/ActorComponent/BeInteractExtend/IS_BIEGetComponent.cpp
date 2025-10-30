@@ -48,33 +48,7 @@ TArray<UActorComponent*> UIS_BIEGetComponent::GetComponentFromComponentClass()
 		{
 			TArray<UActorComponent*> GetCom;
 			BeInteractComponent->GetOwner()->GetComponents(ComClass, GetCom);
-			for (UActorComponent*& Com : GetCom)
-			{
-				if (Tag.Num() > 0)
-				{
-					for (FName& OneTag : Tag)
-					{
-						if (Com->ComponentHasTag(OneTag))
-						{
-							AllComponents.AddUnique(Com);
-							if (NumIsSufficient(AllComponents.Num()))
-							{
-								return AllComponents;
-							}
-							break;
-						}
-					}
-				}
-				else
-				{
-					AllComponents.AddUnique(Com);
-					if (NumIsSufficient(AllComponents.Num()))
-					{
-						return AllComponents;
-					}
-				}
-
-			}
+			ComponentConditionCheck(GetCom);
 		}
 	}
 	return AllComponents;
@@ -88,34 +62,66 @@ TArray<UActorComponent*> UIS_BIEGetComponent::GetComponentFromInterface()
 		{
 			TArray<UActorComponent*> GetCom;
 			GetCom = BeInteractComponent->GetOwner()->GetComponentsByInterface(InterfaceClass);
-			for (UActorComponent*& Com : GetCom)
+			ComponentConditionCheck(GetCom);
+		}
+	}
+	return AllComponents;
+}
+
+void UIS_BIEGetComponent::ComponentConditionCheck(TArray<UActorComponent*> Components)
+{
+	//TArray<UActorComponent*> ReturnComponents;
+	for (UActorComponent*& Com : Components)
+	{
+		bool b = false;
+		//Tag判断
+		if (Tag.Num() > 0)
+		{
+			for (FName& OneTag : Tag)
 			{
-				if (Tag.Num() > 0)
+				if (Com->ComponentHasTag(OneTag))
 				{
-					for (FName& OneTag : Tag)
+					b = true;
+					break;
+				}
+			}
+		}
+		else
+		{
+			b = true;
+		}
+
+		//Socket判断
+		if (SocketName.Num() > 0)
+		{
+			if (b)//如果上面的判断没过，就没必要进行SocketName的判断了
+			{
+				b = false;//重置，默认认为没有通过
+				USceneComponent* SceneCom = Cast<USceneComponent>(Com);
+				if (SceneCom)
+				{
+					for (FName& OneSocketName : SocketName)
 					{
-						if (Com->ComponentHasTag(OneTag))
+						if (SceneCom->GetAttachSocketName() == OneSocketName)
 						{
-							AllComponents.AddUnique(Com);
-							if (NumIsSufficient(AllComponents.Num()))
-							{
-								return AllComponents;
-							}
+							b = true;
 							break;
 						}
 					}
 				}
-				else
-				{
-					AllComponents.AddUnique(Com);
-					if (NumIsSufficient(AllComponents.Num()))
-					{
-						return AllComponents;
-					}
-				}
+			}
+			
+		}
 
+		//上述判断均通过，添加组件
+		if (b)
+		{
+			AllComponents.AddUnique(Com);
+			if (NumIsSufficient(AllComponents.Num()))
+			{
+				return;
 			}
 		}
 	}
-	return AllComponents;
+	//return ReturnComponents;
 }

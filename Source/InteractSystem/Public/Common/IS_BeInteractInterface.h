@@ -234,22 +234,6 @@ public:
 	virtual bool InteractLeaveIsEnd_Implementation() { return true; };
 
 	/*
-	* 尝试交互：该函数会调用InteractCheck，InteractCheck返回为true时调用InteractStart
-	* InteractComponent：哪个交互组件向我发起交互请求
-	*/
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	bool TryInteract(UIS_InteractComponent* InteractComponent);
-	virtual bool TryInteract_Implementation(UIS_InteractComponent* InteractComponent) { return true; };
-
-	/*
-	* 交互检测：是否达到可交互的条件
-	* InteractComponent：哪个交互组件向我发起交互请求
-	*/
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	bool InteractCheck(UIS_InteractComponent* InteractComponent);
-	virtual bool InteractCheck_Implementation(UIS_InteractComponent* InteractComponent) { return true; };
-
-	/*
 	* 开始交互：InteractCheck通过后调用该函数
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/

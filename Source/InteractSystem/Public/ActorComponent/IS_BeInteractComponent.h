@@ -107,8 +107,6 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FInteractEnterOrLeaveDelegate OnInteractLeave;
 	virtual bool InteractLeaveIsEnd_Implementation() override;
-	virtual bool TryInteract_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual bool InteractCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) override;
 	//开始交互
 	UPROPERTY(BlueprintAssignable)

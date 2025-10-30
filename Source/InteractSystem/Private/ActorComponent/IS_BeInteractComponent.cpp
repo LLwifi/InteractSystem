@@ -464,21 +464,6 @@ bool UIS_BeInteractComponent::InteractLeaveIsEnd_Implementation()
 	return BeInteractInfo.bInteractLeaveIsEnd;
 }
 
-bool UIS_BeInteractComponent::TryInteract_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	if (InteractCheck(InteractComponent))
-	{
-		InteractStart(InteractComponent);
-		return true;
-	}
-	return false;
-}
-
-bool UIS_BeInteractComponent::InteractCheck_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	return true;
-}
-
 void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
 {
 	BeInteractDynamicInfo.bIsInInteract = true;
