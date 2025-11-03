@@ -29,11 +29,6 @@ public:
 	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent) override;
 
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
-
 	//改变描边计数
 	UFUNCTION(BlueprintCallable)
 	int32 ChangeOutLineCount(int32 AddOutLineNum);

@@ -38,14 +38,28 @@ void UIS_BIEInteractOutLine::InteractEnter_Implementation(UIS_InteractComponent*
 {
 	Super::InteractEnter_Implementation(InteractComponent, TraceType);
 
-	NetClient_OnInteractEnter(InteractComponent, TraceType);
+	if (EnterInteractTraceType.Contains(TraceType))
+	{
+		if (!CurEnterInteractTraceType.Contains(TraceType))
+		{
+			CurEnterInteractTraceType.Add(TraceType);
+			ChangeOutLineCount(1);
+		}
+	}
 }
 
 void UIS_BIEInteractOutLine::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
 	Super::InteractLeave_Implementation(InteractComponent, TraceType);
 
-	NetClient_OnInteractLeave(InteractComponent, TraceType);
+	if (EnterInteractTraceType.Contains(TraceType))
+	{
+		if (CurEnterInteractTraceType.Contains(TraceType))
+		{
+			CurEnterInteractTraceType.Remove(TraceType);
+			ChangeOutLineCount(-1);
+		}
+	}
 }
 
 bool UIS_BIEInteractOutLine::InteractLeaveIsEnd_Implementation()
@@ -75,30 +89,6 @@ void UIS_BIEInteractOutLine::InteractAttachTo_Implementation(UIS_InteractCompone
 
 void UIS_BIEInteractOutLine::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
 {
-}
-
-void UIS_BIEInteractOutLine::NetClient_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
-{
-	if (EnterInteractTraceType.Contains(TraceType))
-	{
-		if (!CurEnterInteractTraceType.Contains(TraceType))
-		{
-			CurEnterInteractTraceType.Add(TraceType);
-			ChangeOutLineCount(1);
-		}
-	}
-}
-
-void UIS_BIEInteractOutLine::NetClient_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
-{
-	if (EnterInteractTraceType.Contains(TraceType))
-	{
-		if (CurEnterInteractTraceType.Contains(TraceType))
-		{
-			CurEnterInteractTraceType.Remove(TraceType);
-			ChangeOutLineCount(-1);
-		}
-	}
 }
 
 int32 UIS_BIEInteractOutLine::ChangeOutLineCount(int32 AddOutLineNum)

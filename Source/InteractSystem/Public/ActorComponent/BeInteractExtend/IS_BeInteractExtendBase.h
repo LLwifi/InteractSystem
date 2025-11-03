@@ -45,6 +45,11 @@ public:
 	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent) override;
 
 public:
+	/*该扩展的相关事件在哪个网络下运行
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractEventNetType NetType = EIS_InteractEventNetType::Server;
+
 	//正在使用该扩展的【可被交互组件】
 	UPROPERTY(BlueprintReadWrite)
 	UIS_BeInteractComponent* BeInteractComponent;

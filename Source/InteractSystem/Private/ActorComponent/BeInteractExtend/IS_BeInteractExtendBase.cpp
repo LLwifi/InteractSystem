@@ -28,6 +28,7 @@ bool UIS_BeInteractExtendBase::IsSupportedForNetworking() const
 void UIS_BeInteractExtendBase::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
 {
 	BeInteractComponent = BeInteractCom;
+	NetType = Data->NetType;
 }
 
 bool UIS_BeInteractExtendBase::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)

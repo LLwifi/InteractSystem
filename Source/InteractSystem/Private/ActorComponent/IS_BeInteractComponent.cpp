@@ -466,6 +466,7 @@ bool UIS_BeInteractComponent::InteractLeaveIsEnd_Implementation()
 
 void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
 {
+	EIS_BeInteractInterfaceType FunctionType = EIS_BeInteractInterfaceType::InteractStart;
 	BeInteractDynamicInfo.bIsInInteract = true;
 	BeInteractDynamicInfo.AllInteractComponent.Add(InteractComponent);
 
@@ -483,12 +484,12 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractStart(InteractComponent);
+		NetClient_CallBeInteractInterface(FunctionType, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractStart(InteractComponent);
+		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent);
 		break;
 	}
 	default:
@@ -542,12 +543,32 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractStart(BeInteractExtend, InteractComponent);
+		switch (BeInteractExtend->NetType)
+		{
+		case EIS_InteractEventNetType::Server:
+		{
+			IIS_BeInteractInterface::Execute_InteractStart(BeInteractExtend, InteractComponent);
+			break;
+		}
+		case EIS_InteractEventNetType::Client:
+		{
+			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			break;
+		}
+		case EIS_InteractEventNetType::NetMulticast:
+		{
+			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			break;
+		}
+		default:
+			break;
+		}
 	}
 }
 
 void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
 {
+	EIS_BeInteractInterfaceType FunctionType = EIS_BeInteractInterfaceType::InteractEnd;
 	//不同的人同时交互，A先完成了，扣除交互次数，此时B应该被打断或无法完成
 	//交互结束需要清除历史记录中交互者的交互时间
 
@@ -635,12 +656,12 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractEnd(InteractComponent);
+		NetClient_CallBeInteractInterface(FunctionType, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractEnd(InteractComponent);
+		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent);
 		break;
 	}
 	default:
@@ -650,7 +671,26 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractEnd(BeInteractExtend, InteractComponent);
+		switch (BeInteractExtend->NetType)
+		{
+		case EIS_InteractEventNetType::Server:
+		{
+			IIS_BeInteractInterface::Execute_InteractEnd(BeInteractExtend, InteractComponent);
+			break;
+		}
+		case EIS_InteractEventNetType::Client:
+		{
+			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			break;
+		}
+		case EIS_InteractEventNetType::NetMulticast:
+		{
+			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			break;
+		}
+		default:
+			break;
+		}
 	}
 }
 
@@ -698,12 +738,12 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractComplete(InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractComplete(InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent);
 		break;
 	}
 	default:
@@ -737,12 +777,12 @@ void UIS_BeInteractComponent::InteractComplete_MultiSegment_Implementation(UIS_I
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractComplete_MultiSegment(InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractComplete_MultiSegment(InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent);
 		break;
 	}
 	default:
@@ -769,12 +809,12 @@ void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractCompon
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractAttachTo(InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractAttachTo(InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent);
 		break;
 	}
 	default:
@@ -801,12 +841,12 @@ void UIS_BeInteractComponent::InteractAttachDetach_Implementation(UIS_InteractCo
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractAttachDetach(InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractAttachDetach(InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent);
 		break;
 	}
 	default:
@@ -852,64 +892,105 @@ void UIS_BeInteractComponent::NetMulti_OnInteractLeave_Implementation(UIS_Intera
 	OnInteractLeave.Broadcast(InteractComponent, TraceType);
 }
 
-void UIS_BeInteractComponent::NetClient_OnInteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractStart.Broadcast(InteractComponent);
+	switch (InterfaceType)
+	{
+	case EIS_BeInteractInterfaceType::InteractStart:
+	{
+		OnInteractStart.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_BeInteractInterfaceType::InteractEnd:
+	{
+		OnInteractEnd.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_BeInteractInterfaceType::InteractComplete:
+	{
+		OnInteractComplete.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_BeInteractInterfaceType::InteractComplete_MultiSegment:
+	{
+		OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_BeInteractInterfaceType::InteractAttachTo:
+	{
+		OnInteractAttachTo.Broadcast(InteractComponent);
+		break;
+	}
+	case EIS_BeInteractInterfaceType::InteractAttachDetach:
+	{
+		OnInteractAttachDetach.Broadcast(InteractComponent);
+		break;
+	}
+	default:
+		break;
+	}
 }
 
-void UIS_BeInteractComponent::NetMulti_OnInteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractStart.Broadcast(InteractComponent);
+	CallBeInteractInterface(InterfaceType, InteractComponent);
 }
 
-void UIS_BeInteractComponent::NetClient_OnInteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractEnd.Broadcast(InteractComponent);
+	CallBeInteractInterface(InterfaceType, InteractComponent);
 }
 
-void UIS_BeInteractComponent::NetMulti_OnInteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractEnd.Broadcast(InteractComponent);
+	if (Extend)
+	{
+		switch (InterfaceType)
+		{
+		case EIS_BeInteractInterfaceType::InteractStart:
+		{
+			IIS_BeInteractInterface::Execute_InteractStart(Extend, InteractComponent);
+			break;
+		}
+		case EIS_BeInteractInterfaceType::InteractEnd:
+		{
+			IIS_BeInteractInterface::Execute_InteractEnd(Extend, InteractComponent);
+			break;
+		}
+		case EIS_BeInteractInterfaceType::InteractComplete:
+		{
+			IIS_BeInteractInterface::Execute_InteractComplete(Extend, InteractComponent);
+			break;
+		}
+		case EIS_BeInteractInterfaceType::InteractComplete_MultiSegment:
+		{
+			IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(Extend, InteractComponent);
+			break;
+		}
+		case EIS_BeInteractInterfaceType::InteractAttachTo:
+		{
+			IIS_BeInteractInterface::Execute_InteractAttachTo(Extend, InteractComponent);
+			break;
+		}
+		case EIS_BeInteractInterfaceType::InteractAttachDetach:
+		{
+			IIS_BeInteractInterface::Execute_InteractAttachDetach(Extend, InteractComponent);
+			break;
+		}
+		default:
+			break;
+		}
+	}
 }
 
-void UIS_BeInteractComponent::NetClient_OnInteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractComplete.Broadcast(InteractComponent);
+	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent);
 }
 
-void UIS_BeInteractComponent::NetMulti_OnInteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
 {
-	OnInteractComplete.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetClient_OnInteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetMulti_OnInteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetClient_OnInteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractAttachTo.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetMulti_OnInteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractAttachTo.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetClient_OnInteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractAttachDetach.Broadcast(InteractComponent);
-}
-
-void UIS_BeInteractComponent::NetMulti_OnInteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
-{
-	OnInteractAttachDetach.Broadcast(InteractComponent);
+	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent);
 }
 
 UAnimMontage* UIS_BeInteractComponent::GetMontageFromKeyName(FName KeyName)
@@ -1182,5 +1263,3 @@ bool UIS_BeInteractComponent::CanInteract_Extend(UIS_InteractComponent* Interact
 	}
 	return true;
 }
-
-

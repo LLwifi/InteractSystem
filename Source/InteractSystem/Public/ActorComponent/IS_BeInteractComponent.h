@@ -31,15 +31,6 @@ public:
 	FTimerHandle InteractRoleNumVerifyTimerHandle;
 };
 
-//交互相关事件的网络复制决策类型
-UENUM(BlueprintType)
-enum class EIS_InteractEventNetType :uint8
-{
-	Server UMETA(DisplayName = "在服务器上运行"),
-	Client UMETA(DisplayName = "在拥有的客户端上运行"),
-	NetMulticast UMETA(DisplayName = "组播")
-};
-
 /*被交互组件：该组件描述一个可以被交互的资源的基本信息
 * 需要注意如果要进行网络同步，添加该组件的Actor也需要开启网络同步
 * 待解决问题：扩展完全由外部管理的开始-结束-完成	交互CD	交互锁定		交互选择/多选		交互速度
@@ -150,35 +141,20 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void NetMulti_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
 
+	UFUNCTION()
+	void CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
 	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractStart(UIS_InteractComponent* InteractComponent);
+	void NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractStart(UIS_InteractComponent* InteractComponent);
+	void NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
 
+	//根据扩展应用类型调用对应的RPC函数
+	UFUNCTION()
+	void CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
 	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractEnd(UIS_InteractComponent* InteractComponent);
+	void NetClient_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractEnd(UIS_InteractComponent* InteractComponent);
-
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractComplete(UIS_InteractComponent* InteractComponent);
-	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractComplete(UIS_InteractComponent* InteractComponent);
-
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent);
-	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent);
-
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractAttachTo(UIS_InteractComponent* InteractComponent);
-	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractAttachTo(UIS_InteractComponent* InteractComponent);
-
-	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractAttachDetach(UIS_InteractComponent* InteractComponent);
-	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractAttachDetach(UIS_InteractComponent* InteractComponent);
+	void NetMulti_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
 
 	//-----------------------------------------------------------------------------------------Net
 	/*通过配置名称获取蒙太奇
