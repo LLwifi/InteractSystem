@@ -174,6 +174,18 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::GetInteractCheckComponen
 	return AllBeInteract;
 }
 
+bool UIS_InteractComponent::TriggerInteract(UPARAM(Ref)UIS_BeInteractComponent*& BeInteractCom, FCC_CompareInfo CompareInfo, EIS_InteractTraceType TraceType, FText& FailText)
+{
+	bool ReturnBool = false;
+	if (BeInteractCom && IIS_BeInteractInterface::Execute_CanInteract(BeInteractCom, this, CompareInfo, FailText))
+	{
+		StartInteract(BeInteractCom);
+		UpdateInteractTarget(BeInteractCom, TraceType);
+		ReturnBool = true;
+	}
+	return ReturnBool;
+}
+
 TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteractCom(FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom)
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
@@ -196,16 +208,8 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteract
 
 bool UIS_InteractComponent::TryTriggerInteract_CameraTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
-	//InteractCheck();//这里调用该函数 在网络复制下会导致其他端同步了进入的检测类型，然后若其他端没有移入该可被交互物，其他端会触发【离开】事件 又由【离开】事件触发结束交互
-	bool ReturnBool = false;
 	AllBeInteract = CameraTraceGetBeInteractCom(InteractRayInfo, TopPriorityCom);
-	if (TopPriorityCom && IIS_BeInteractInterface::Execute_CanInteract(TopPriorityCom, this, CompareInfo, FailText))
-	{
-		StartInteract(TopPriorityCom);
-		UpdateInteractTarget(TopPriorityCom, EIS_InteractTraceType::CameraTrace);
-		ReturnBool = true;
-	}
-	return ReturnBool;
+	return TriggerInteract(TopPriorityCom, CompareInfo, EIS_InteractTraceType::CameraTrace, FailText);
 }
 
 TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteractCom(FVector Start, FVector End, float Radius, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom)
@@ -231,15 +235,8 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteract
 bool UIS_InteractComponent::TryTriggerInteract_SphereTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, FVector Start, FVector End, float Radius, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
 	//InteractCheck();//这里调用该函数 在网络复制下会导致其他端同步了进入的检测类型，然后若其他端没有移入该可被交互物，其他端会触发【离开】事件 又由【离开】事件触发结束交互
-	bool ReturnBool = false;
 	AllBeInteract = SphereTraceGetBeInteractCom(Start, End, Radius, InteractRayInfo, TopPriorityCom);
-	if (TopPriorityCom && IIS_BeInteractInterface::Execute_CanInteract(TopPriorityCom, this, CompareInfo, FailText))
-	{
-		StartInteract(TopPriorityCom);
-		UpdateInteractTarget(TopPriorityCom, EIS_InteractTraceType::SphereTrace);
-		ReturnBool = true;
-	}
-	return ReturnBool;
+	return TriggerInteract(TopPriorityCom, CompareInfo, EIS_InteractTraceType::SphereTrace, FailText);
 }
 
 void UIS_InteractComponent::InteractCheckStateChange(bool IsActive)

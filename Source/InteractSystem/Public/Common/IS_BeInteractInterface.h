@@ -5,15 +5,6 @@
 #include <IS_StructAndEnum.h>
 #include "IS_BeInteractInterface.generated.h"
 
-//交互相关事件的网络复制决策类型
-UENUM(BlueprintType)
-enum class EIS_InteractEventNetType :uint8
-{
-	Server UMETA(DisplayName = "在服务器上运行"),
-	Client UMETA(DisplayName = "在拥有的客户端上运行"),
-	NetMulticast UMETA(DisplayName = "组播")
-};
-
 //被交互接口函数类型枚举
 UENUM(BlueprintType)
 enum class EIS_BeInteractInterfaceType :uint8

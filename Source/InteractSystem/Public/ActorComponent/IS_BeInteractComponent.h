@@ -236,6 +236,7 @@ public:
 	bool CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText);
 public:
 	/*交互相关事件的网络复制决策
+	* 使用改功能必须保证其Owner具有网络复制的能力，否则该项改动无效
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractEventNetType InteractEventNetType = EIS_InteractEventNetType::Server;

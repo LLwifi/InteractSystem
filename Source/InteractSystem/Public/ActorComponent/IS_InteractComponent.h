@@ -106,6 +106,10 @@ public:
 	UFUNCTION(BlueprintPure)
 	TArray<UIS_BeInteractComponent*> GetInteractCheckComponentFromType(EIS_InteractTraceType InteractTraceType, UIS_BeInteractComponent*& TopPriorityCom);
 
+	//触发交互
+	UFUNCTION(BlueprintCallable)
+	bool TriggerInteract(UPARAM(Ref)UIS_BeInteractComponent*& BeInteractCom, FCC_CompareInfo CompareInfo, EIS_InteractTraceType TraceType, FText& FailText);
+
 	/*相机射线获取可被交互组件
 	* return：全部命中的可被交互组件
 	* TopPriorityCom：最高交互优先级的交互组件
@@ -142,7 +146,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	TArray<UIS_BeInteractComponent*> InteractCheckFromEnterType(EIS_InteractTraceType InteractTraceType);
 
-	//广播交互事件
+	//更新交互目标
 	UFUNCTION(NetMulticast, Reliable)
 	void UpdateInteractTarget(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType TraceType);
 

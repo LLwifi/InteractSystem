@@ -14,6 +14,15 @@ class UIS_InteractComponent;
 class UUserWidget;
 class UIS_BeInteractExtendBase;
 
+//交互相关事件的网络复制决策类型
+UENUM(BlueprintType)
+enum class EIS_InteractEventNetType :uint8
+{
+	Server UMETA(DisplayName = "服务器"),//服务器
+	Client UMETA(DisplayName = "客户端"),//拥有的客户端
+	NetMulticast UMETA(DisplayName = "服务器和客户端")//组播
+};
+
 //被交互的类型
 UENUM(BlueprintType)
 enum class EIS_InteractType :uint8
@@ -296,6 +305,10 @@ public:
 		FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
 	}
 public:
+	//在网络下交互响应的端
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractEventNetType NetType = EIS_InteractEventNetType::Server;
+
 	//交互UI显示文本
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FText InteractText;
