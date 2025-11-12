@@ -21,6 +21,8 @@ UIS_BeInteractComponent::UIS_BeInteractComponent()
 	SetIsReplicatedByDefault(true);
 	// ...
 	SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
+	SetCastShadow(false);
+	SetCanEverAffectNavigation(false);
 }
 
 #if WITH_EDITOR
@@ -91,12 +93,14 @@ void UIS_BeInteractComponent::BeginPlay()
 		{
 			FIS_BeInteractExtend BeInteractExtendInfo;
 			UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(BeInteractExtendHandle, BeInteractExtendInfo);
-
-			UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
-			if (BeInteractExtend)
+			if (BeInteractExtendInfo.BeInteractExtendClass)
 			{
-				BeInteractExtend->Init(this, BeInteractExtendInfo.BeInteractExtend);
-				AllExtend.Add(BeInteractExtend);
+				UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
+				if (BeInteractExtend)
+				{
+					BeInteractExtend->Init(this, BeInteractExtendInfo.BeInteractExtend);
+					AllExtend.Add(BeInteractExtend);
+				}
 			}
 		}
 	}
@@ -697,12 +701,15 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
 {
 	//不同的人同时交互，A先完成了，扣除交互次数，此时B应该被打断或无法完成
+	if (InteractComponent)
+	{
+		BeInteractDynamicInfo.ClearInteractTimeFromRoleSign(InteractComponent->GetRoleSign());//交互完成需要清除历史记录中该交互者的交互时间
+		BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
+	}
 
 	BeInteractDynamicInfo.bIsComplete = true;
 	BeInteractDynamicInfo.bIsVerifying = false;
 	BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;//清除统一累计时长
-	BeInteractDynamicInfo.ClearInteractTimeFromRoleSign(InteractComponent->GetRoleSign());//交互完成需要清除历史记录中该交互者的交互时间
-	BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
 	BeInteractDynamicInfo.InteractCompleteCount = 0;//清除多段交互完成次数
 	GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractRoleNumVerifyTimerHandle);//停止检测交互人数
 	//停掉全部Timer
@@ -754,9 +761,12 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	{
 		IIS_BeInteractInterface::Execute_InteractAttachTo(this, InteractComponent);
 	}
-	else
+	else 
 	{
-		InteractComponent->EndCurInteract();//完成时使交互组件结束交互
+		if (InteractComponent)
+		{
+			InteractComponent->EndCurInteract();//完成时使交互组件结束交互
+		}
 	}
 
 	//调用扩展对象的同名函数

@@ -259,6 +259,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_BeInteractExtendHandle> AddBeInteractExtendHandles;
 
+	////额外添加的扩展实例
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced)
+	//TArray<TObjectPtr<UIS_BeInteractExtendBase>> AddBeInteractExtendObject;
+
 	//被交互的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FIS_BeInteractInfo BeInteractInfo;

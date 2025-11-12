@@ -15,6 +15,7 @@ void UIS_BIEGetComponent::Init_Implementation(UIS_BeInteractComponent* BeInterac
 		ComponentClass = DataCom->ComponentClass;
 		Interface = DataCom->Interface;
 		Tag = DataCom->Tag;
+		SocketName = DataCom->SocketName;
 	}
 }
 
