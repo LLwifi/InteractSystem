@@ -6,6 +6,44 @@
 #include "ActorComponent/BeInteractExtend/IS_BIEGetComponent.h"
 #include "IS_BIEInteractOutLine.generated.h"
 
+/*描边检测类型信息
+* 哪些检测可以描边，在哪些条件下可以描边
+*/
+USTRUCT(BlueprintType)
+struct FIS_OutLineInteractTraceTypeInfo
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractTraceType InteractTraceType;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FIS_InteractVerifyInfo InteractVerifyInfo;
+};
+
+/*描边检测类型待验证信息
+*/
+USTRUCT(BlueprintType)
+struct FIS_OutLineBeVerifyInfo
+{
+	GENERATED_BODY()
+public:
+	bool operator==(FIS_OutLineBeVerifyInfo VerifyInfo)
+	{
+		return InteractTraceType == VerifyInfo.InteractTraceType && InteractComponent == VerifyInfo.InteractComponent;
+	}
+	FIS_OutLineBeVerifyInfo(){}
+	FIS_OutLineBeVerifyInfo(UIS_InteractComponent* InteractCom, EIS_InteractTraceType TraceType)
+	{
+		InteractComponent = InteractCom;
+		InteractTraceType = TraceType;
+	}
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractTraceType InteractTraceType;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UIS_InteractComponent* InteractComponent;
+};
+
 /**可被交互物的功能扩展——描边
  * 该功能的作用受限于后期材质，必现要场景中有描边后期该组件设置的参数才有意义
  */
@@ -32,6 +70,15 @@ public:
 	//改变描边计数
 	UFUNCTION(BlueprintCallable)
 	int32 ChangeOutLineCount(int32 AddOutLineNum);
+
+	UFUNCTION()
+	void ReplicatedUsing_OutLineInteractTraceTypeInfo();
+
+	//间隔验证检测的回调函数
+	UFUNCTION()
+	void OutLineCheckIntervalBack();
+	UFUNCTION()
+	void OutLineBeVerifyInfoChange(bool IsAdd, FIS_OutLineBeVerifyInfo VerifyInfo);
 public:
 	/*描边计数
 	* 开启后在移入该被交互组件时描边计数+1，在移出该被交互组件时描边计数-1
@@ -41,15 +88,27 @@ public:
 	int32 OutLineCount = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	int32 CustomDepthStencilValue_OutLine = 255;
+	//验证未通过时的间隔验证时间
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float OutLineCheckInterval = 1.0f;
+
 	//描边网格组件
 	UPROPERTY(BlueprintReadWrite, Replicated)
 	TArray<UPrimitiveComponent*> OutLineMeshComponnets;
 
 	//哪些检测类型在进入的时候需要开启描边
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
-	TArray<EIS_InteractTraceType> EnterInteractTraceType;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = ReplicatedUsing_OutLineInteractTraceTypeInfo)
+	TArray<FIS_OutLineInteractTraceTypeInfo> OutLineInteractTraceTypeInfo;
+	UPROPERTY(BlueprintReadWrite)
+	TMap<EIS_InteractTraceType, FIS_InteractVerifyInfo> OutLineInteractTraceTypeInfoMap;
 
 	//当前已经记过数/进入的检测类型
 	UPROPERTY(BlueprintReadWrite)
 	TArray<EIS_InteractTraceType> CurEnterInteractTraceType;
+
+	UPROPERTY()
+	FTimerHandle OutLineCheckTimeHandle;
+	//需要间隔验证的待检测类型
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIS_OutLineBeVerifyInfo> AllOutLineBeVerifyInfo;
 };

@@ -24,6 +24,8 @@ public:
 
 	virtual bool IsSupportedForNetworking() const override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
+
 	/*初始化 通常由UIS_BeInteractComponent 组件创建时调用
 	* BeInteractCom：哪个被交互组件创建的“我”
 	* Data：初始化使用的数据表里的配置（与自身是一个类型）需要使用该数据初始化自身
@@ -51,6 +53,6 @@ public:
 	EIS_InteractEventNetType NetType = EIS_InteractEventNetType::Server;
 
 	//正在使用该扩展的【可被交互组件】
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(BlueprintReadWrite, Replicated)
 	UIS_BeInteractComponent* BeInteractComponent;
 };

@@ -25,8 +25,21 @@ bool UIS_BeInteractExtendBase::IsSupportedForNetworking() const
 	return true;
 }
 
+void UIS_BeInteractExtendBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UIS_BeInteractExtendBase, BeInteractComponent);
+}
+
 void UIS_BeInteractExtendBase::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
 {
+
+//#if WITH_EDITOR
+//	ensureMsgf(sizeof(UIS_BeInteractExtendBase) == 72, TEXT("This function may need to be updated to account for new members-----[%s]_NewSize:%d"), *GetName(), sizeof(UIS_BeInteractExtendBase));
+//#endif
+
+
 	BeInteractComponent = BeInteractCom;
 	NetType = Data->NetType;
 }

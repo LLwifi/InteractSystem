@@ -16,6 +16,7 @@ class INTERACTSYSTEM_API UIS_BIEGetComponent : public UIS_BeInteractExtendBase
 	GENERATED_BODY()
 
 public:
+	
 	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data) override;
 
 	//当前的组件数量是否足够

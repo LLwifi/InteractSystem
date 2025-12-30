@@ -158,7 +158,6 @@ public:
 
 	//-----------------------------------------------------------------------------------------Net
 	/*通过配置名称获取蒙太奇
-	* return : -1表示未成功获取
 	*/
 	UFUNCTION(BlueprintPure)
 	UAnimMontage* GetMontageFromKeyName(FName KeyName = FName("Default"));
@@ -234,6 +233,12 @@ public:
 	//检测全部扩展类是否允许交互
 	UFUNCTION(BlueprintPure)
 	bool CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText);
+
+	/*通过Handle创建被交互扩展
+	* 注意：开启了网络同步后，在服务器创建会将扩展同步给其他端
+	*/
+	UFUNCTION(BlueprintCallable)
+	void CreateBeInteractExtendFromHandle(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle);
 public:
 	/*交互相关事件的网络复制决策
 	* 使用改功能必须保证其Owner具有网络复制的能力，否则该项改动无效
@@ -258,10 +263,6 @@ public:
 	//额外添加的扩展
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_BeInteractExtendHandle> AddBeInteractExtendHandles;
-
-	////额外添加的扩展实例
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced)
-	//TArray<TObjectPtr<UIS_BeInteractExtendBase>> AddBeInteractExtendObject;
 
 	//被交互的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

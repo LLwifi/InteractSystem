@@ -30,5 +30,4 @@ public:
 	//通过FIS_BeInteractInfoHandle获取【被交互扩展】结构体数据
 	UFUNCTION(BlueprintCallable)
 	static bool GetBeInteractExtendFromHandle(FIS_BeInteractExtendHandle Handle, FIS_BeInteractExtend& BeInteractExtend);
-
 };

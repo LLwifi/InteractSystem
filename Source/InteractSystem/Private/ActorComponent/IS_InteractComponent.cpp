@@ -61,7 +61,6 @@ void UIS_InteractComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UIS_InteractComponent, CurStartInteractComponent);
-	//DOREPLIFETIME(UIS_InteractComponent, InteractCheckComponents);
 }
 
 // Called every frame
@@ -106,49 +105,97 @@ void UIS_InteractComponent::EndCurInteract()
 	}
 }
 
-TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom)
+bool UIS_InteractComponent::InteractConditionCheck(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType InteractTraceType, FText& FailText)
+{
+	bool IsCheck = false;
+	//被交互组件有效 && 允许被该类型检测到 && 没有被Tag忽略
+	if (BeInteractComponent && BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition.Contains(InteractTraceType) && !BeInteractComponent->BeInteractInfo.InteractTag.HasAnyExact(InteractIgnoreTag))
+	{
+		IsCheck = true;
+		FIS_BeInteractCheckCondition Condition = BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition[InteractTraceType];
+		if (Condition.bIsActiveTraceCheck)
+		{
+			IsCheck = IIS_BeInteractInterface::Execute_IsInteractActive(BeInteractComponent);
+		}
+		if (IsCheck && Condition.bIsVerifyTraceCheck)//是否开启了验证
+		{
+			if (IsCheck && Condition.bIsDistanceVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractDistanceVerify)//是否有距离验证，且被交互目标配置了距离验证
+			{
+				IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.DistanceVerify(this, BeInteractComponent, FailText);
+			}
+			if (IsCheck && Condition.bIsBeInteractAngleVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_BeInteractAngleVerify)//是否有被交互目标的角度验证，且被交互目标配置了角度验证
+			{
+				IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.BeInteractAngleVerifyCheck(this, BeInteractComponent, FailText);
+			}
+			if (IsCheck && Condition.bIsInteractorsAngleVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractorsAngleVerify)//是否有交互者的角度验证，且被交互目标配置了角度验证
+			{
+				IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.InteractorsAngleVerifyCheck(this, BeInteractComponent, FailText);
+			}
+		}
+		if (IsCheck && Condition.bIsCompareTraceCheck)
+		{
+			IsCheck = BeInteractComponent->BeInteractInfo.BeCompareInfo.CompareResult(DefaultCompareInfo, FailText);
+		}
+	}
+	return IsCheck;
+}
+
+bool UIS_InteractComponent::InteractVerify(UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceType, FText& FailText)
+{
+	bool IsPass = false;
+	//被交互组件有效 && 允许被该类型检测到 && 没有被Tag忽略
+	if (BeInteractComponent && BeInteractComponent->BeInteractInfo.InteractTypeVerifyInfo.Contains(TraceType) && !BeInteractComponent->BeInteractInfo.InteractTag.HasAnyExact(InteractIgnoreTag))
+	{
+		IsPass = true;
+		FIS_InteractVerifyInfo VerifyInfo = BeInteractComponent->BeInteractInfo.InteractTypeVerifyInfo[TraceType];
+		if (VerifyInfo.bIsActiveTraceCheck)//是否只有被交互组件激活后才能检测
+		{
+			IsPass = IIS_BeInteractInterface::Execute_IsInteractActive(BeInteractComponent);
+		}
+		if (IsPass && VerifyInfo.bIsCompareTraceCheck)//比对
+		{
+			IsPass = BeInteractComponent->BeInteractInfo.BeCompareInfo.CompareResult(DefaultCompareInfo, FailText);
+		}
+		if (IsPass)//验证
+		{
+			IsPass = BeInteractComponent->BeInteractInfo.InteractTypeVerifyInfo[TraceType].Verify(this, BeInteractComponent, FailText);
+		}
+	}
+	return IsPass;
+}
+
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText)
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
 	for (const FHitResult& HitResult : OutHit)
 	{
 		UIS_BeInteractComponent* BeInteractComponent = Cast<UIS_BeInteractComponent>(HitResult.GetComponent());
-		if (BeInteractComponent)
+		if (InteractConditionCheck(BeInteractComponent, InteractTraceType, FailText))
 		{
-			bool IsCheck = false;
-			FText FailText;
-			if (BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition.Contains(InteractTraceType))
+			AllBeInteract.Add(BeInteractComponent);
+			if (!TopPriorityCom || //为空直接设置
+				IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
 			{
-				IsCheck = true;
-				FIS_BeInteractCheckCondition Condition = BeInteractComponent->BeInteractInfo.InteractCheckEnterCondition[InteractTraceType];
-				if (Condition.bIsActiveTraceCheck)
-				{
-					IsCheck = IIS_BeInteractInterface::Execute_IsInteractActive(BeInteractComponent);
-				}
-				if (IsCheck && Condition.bIsVerifyTraceCheck)//是否开启了验证
-				{
-					if(IsCheck && Condition.bIsDistanceVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractDistanceVerify)//是否有距离验证，且被交互目标配置了距离验证
-					{
-						IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.DistanceVerify(this, BeInteractComponent, FailText);
-					}
-					if (IsCheck && Condition.bIsAngleVerifyTraceCheck && BeInteractComponent->BeInteractInfo.InteractVerifyInfo.bOverride_InteractAngleVerify)//是否有角度验证，且被交互目标配置了角度验证
-					{
-						IsCheck = BeInteractComponent->BeInteractInfo.InteractVerifyInfo.AngleVerify(this, BeInteractComponent, FailText);
-					}
-				}
-				if (IsCheck && Condition.bIsCompareTraceCheck)
-				{
-					IsCheck = BeInteractComponent->BeInteractInfo.BeCompareInfo.CompareResult(DefaultCompareInfo, FailText);
-				}
+				TopPriorityCom = BeInteractComponent;
 			}
+		}
+	}
+	return AllBeInteract;
+}
 
-			if (IsCheck)
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceOutHitVerify(FGameplayTag TraceType, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText)
+{
+	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
+	for (const FHitResult& HitResult : OutHit)
+	{
+		UIS_BeInteractComponent* BeInteractComponent = Cast<UIS_BeInteractComponent>(HitResult.GetComponent());
+		if (InteractVerify(BeInteractComponent, TraceType, FailText))
+		{
+			AllBeInteract.Add(BeInteractComponent);
+			if (!TopPriorityCom || //为空直接设置
+				IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
 			{
-				AllBeInteract.Add(BeInteractComponent);
-				if (!TopPriorityCom || //为空直接设置
-					IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
-				{
-					TopPriorityCom = BeInteractComponent;
-				}
+				TopPriorityCom = BeInteractComponent;
 			}
 		}
 	}
@@ -159,15 +206,18 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::GetInteractCheckComponen
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
 	TopPriorityCom = nullptr;
-	for (UIS_BeInteractComponent*& BeInteractComponent : InteractCheckComponents)
+	for (FIS_TraceCheckComponentInfo& TraceCheckComponentInfo : AllTraceCheckComponent)
 	{
-		if (InteractTraceType == EIS_InteractTraceType::None || BeInteractComponent->BeInteractDynamicInfo.AllEnterTraceType.Contains(InteractTraceType))
+		if (TraceCheckComponentInfo.BeInteractComponent)
 		{
-			AllBeInteract.Add(BeInteractComponent);
-			if (!TopPriorityCom || //为空直接设置
-				IIS_BeInteractInterface::Execute_GetInteractPriority(BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
+			if (InteractTraceType == EIS_InteractTraceType::None || TraceCheckComponentInfo.BeInteractComponent->BeInteractDynamicInfo.AllEnterTraceType.Contains(InteractTraceType))
 			{
-				TopPriorityCom = BeInteractComponent;
+				AllBeInteract.Add(TraceCheckComponentInfo.BeInteractComponent);
+				if (!TopPriorityCom || //为空直接设置
+					IIS_BeInteractInterface::Execute_GetInteractPriority(TraceCheckComponentInfo.BeInteractComponent) > IIS_BeInteractInterface::Execute_GetInteractPriority(TopPriorityCom))
+				{
+					TopPriorityCom = TraceCheckComponentInfo.BeInteractComponent;
+				}
 			}
 		}
 	}
@@ -186,7 +236,7 @@ bool UIS_InteractComponent::TriggerInteract(UPARAM(Ref)UIS_BeInteractComponent*&
 	return ReturnBool;
 }
 
-TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteractCom(FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom)
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteractCom(FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText)
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
 	TopPriorityCom = nullptr;
@@ -201,18 +251,18 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::CameraTraceGetBeInteract
 		//如果考虑模糊处理，这里可以使用圆形的射线
 		TArray<FHitResult> OutHit;
 		UKismetSystemLibrary::LineTraceMulti(this, CameraLocation, TraceEndLocation, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
-		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::CameraTrace, InteractRayInfo, OutHit, TopPriorityCom);
+		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::CameraTrace, OutHit, TopPriorityCom, FailText);
 	}
 	return AllBeInteract;
 }
 
 bool UIS_InteractComponent::TryTriggerInteract_CameraTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
-	AllBeInteract = CameraTraceGetBeInteractCom(InteractRayInfo, TopPriorityCom);
+	AllBeInteract = CameraTraceGetBeInteractCom(InteractRayInfo, TopPriorityCom, FailText);
 	return TriggerInteract(TopPriorityCom, CompareInfo, EIS_InteractTraceType::CameraTrace, FailText);
 }
 
-TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteractCom(FVector Start, FVector End, float Radius, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom)
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteractCom(FVector Start, FVector End, float Radius, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText)
 {
 	TArray<UIS_BeInteractComponent*> AllBeInteract;//全部可被交互组件
 	TopPriorityCom = nullptr;
@@ -227,15 +277,14 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::SphereTraceGetBeInteract
 		//如果考虑模糊处理，这里可以使用圆形的射线
 		TArray<FHitResult> OutHit;
 		UKismetSystemLibrary::SphereTraceMulti(this, Start, End, Radius, TraceChannel, InteractRayInfo.bTraceComplex, InteractRayInfo.ActorsToIgnore, DrawDebugType, OutHit, InteractRayInfo.bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
-		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::SphereTrace, InteractRayInfo, OutHit, TopPriorityCom);
+		AllBeInteract = TraceOutHitCheck(EIS_InteractTraceType::SphereTrace, OutHit, TopPriorityCom, FailText);
 	}
 	return AllBeInteract;
 }
 
 bool UIS_InteractComponent::TryTriggerInteract_SphereTrace(FCC_CompareInfo CompareInfo, FIS_InteractRayInfo InteractRayInfo, FVector Start, FVector End, float Radius, UIS_BeInteractComponent*& TopPriorityCom, TArray<UIS_BeInteractComponent*>& AllBeInteract, FText& FailText)
 {
-	//InteractCheck();//这里调用该函数 在网络复制下会导致其他端同步了进入的检测类型，然后若其他端没有移入该可被交互物，其他端会触发【离开】事件 又由【离开】事件触发结束交互
-	AllBeInteract = SphereTraceGetBeInteractCom(Start, End, Radius, InteractRayInfo, TopPriorityCom);
+	AllBeInteract = SphereTraceGetBeInteractCom(Start, End, Radius, InteractRayInfo, TopPriorityCom, FailText);
 	return TriggerInteract(TopPriorityCom, CompareInfo, EIS_InteractTraceType::SphereTrace, FailText);
 }
 
@@ -243,59 +292,71 @@ void UIS_InteractComponent::InteractCheckStateChange(bool IsActive)
 {
 	if (IsActive)
 	{
-		GetWorld()->GetTimerManager().SetTimer(InteractCheckTimeHandle, this, &UIS_InteractComponent::InteractCheck, InteractCheckInterval, true);
+		GetWorld()->GetTimerManager().SetTimer(InteractCheckTimeHandle, this, &UIS_InteractComponent::InteractEnterCheck, InteractCheckInterval, true);
 	}
 	else
 	{
 		GetWorld()->GetTimerManager().ClearTimer(InteractCheckTimeHandle);
+		//移除/清空当前移入的交互目标
+		for (FIS_TraceCheckComponentInfo& TraceCheckComponentInfo : AllTraceCheckComponent)
+		{
+			ServerLeaveInteractCheck(TraceCheckComponentInfo.BeInteractComponent, TraceCheckComponentInfo.EnterTraceType);
+			IIS_BeInteractInterface::Execute_InteractLeave(TraceCheckComponentInfo.BeInteractComponent, this, TraceCheckComponentInfo.EnterTraceType);//客户端仍然需要移除该检测类型
+		}
+		UpdateInteractTarget(nullptr, EIS_InteractTraceType::None);//广播交互事件
+		AllTraceCheckComponent.Empty();
+		CurStartInteractComponent = nullptr;
 	}
 }
 
-void UIS_InteractComponent::InteractCheck()
+void UIS_InteractComponent::InteractEnterCheck()
 {
-	//Enter可以被多次触发，但每种检测的类型只能触发一次
-	TSet<UIS_BeInteractComponent*> AllBeInteractCom;
+	TArray<FIS_TraceCheckComponentInfo> TraceCheckComponents;
 	for (EIS_InteractTraceType& TraceType : InteractCheckTypes)
 	{
-		AllBeInteractCom.Append(InteractCheckFromEnterType(TraceType));
+		for (UIS_BeInteractComponent*& BeInteractCom : InteractCheckFromEnterType(TraceType))
+		{
+			TraceCheckComponents.Add(FIS_TraceCheckComponentInfo(BeInteractCom, TraceType));
+		}
 	}
-
-	InteractCheckComponents = AllBeInteractCom.Array();
+	AllTraceCheckComponent = TraceCheckComponents;
 }
 
 TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractCheckFromEnterType(EIS_InteractTraceType InteractTraceType)
 {
 	UIS_BeInteractComponent* TopPriorityCom = nullptr;
 	TArray<UIS_BeInteractComponent*> AllBeInteractCom;
+	FText FailText;
 	switch (InteractTraceType)
 	{
 	case EIS_InteractTraceType::CameraTrace:
 	{
-		AllBeInteractCom = CameraTraceGetBeInteractCom(InteractCheckRayInfo, TopPriorityCom);
+		AllBeInteractCom = CameraTraceGetBeInteractCom(InteractCheckRayInfo, TopPriorityCom, FailText);
 		break;
 	}
 	case EIS_InteractTraceType::SphereTrace:
 	{
-		AllBeInteractCom = SphereTraceGetBeInteractCom(GetOwner()->GetActorLocation(), GetOwner()->GetActorLocation(), SphereDistance, InteractCheckRayInfo, TopPriorityCom);
+		AllBeInteractCom = SphereTraceGetBeInteractCom(GetOwner()->GetActorLocation(), GetOwner()->GetActorLocation(), SphereDistance, InteractCheckRayInfo, TopPriorityCom, FailText);
 		break;
 	}
 	default:
 		break;
 	}
 
-	TArray<UIS_BeInteractComponent*> LastInteractCheckComponents = InteractCheckComponents;
-	for (UIS_BeInteractComponent*& BeInteractCom : LastInteractCheckComponents)
+	//离开事件判断
+	for (FIS_TraceCheckComponentInfo& TraceCheckComponentInfo : AllTraceCheckComponent)
 	{
-		//BeInteractCom有效（拾取道具会在交互后删除目标） && 曾经进入的交互组件还在不在新一批的交互组件中 && 检测类型是否通过
-		if (BeInteractCom && !AllBeInteractCom.Contains(BeInteractCom) && BeInteractCom->TraceTypeCheck(InteractTraceType, false))
+		//BeInteractCom有效（拾取道具会在交互后删除目标） && 曾经进入的交互组件不在新一批的交互组件中 && 检测类型是否通过
+		if (TraceCheckComponentInfo.BeInteractComponent && !AllBeInteractCom.Contains(TraceCheckComponentInfo.BeInteractComponent) && TraceCheckComponentInfo.BeInteractComponent->TraceTypeCheck(InteractTraceType, false))
 		{
 			//不在，触发离开事件 离开需要触发交互结束，因此离开需要在服务器上被调用
-			ServerLeaveInteractCheck(BeInteractCom, InteractTraceType);
-			IIS_BeInteractInterface::Execute_InteractLeave(BeInteractCom, this, InteractTraceType);//客户端仍然需要移除该检测类型
+			ServerLeaveInteractCheck(TraceCheckComponentInfo.BeInteractComponent, InteractTraceType);
+			IIS_BeInteractInterface::Execute_InteractLeave(TraceCheckComponentInfo.BeInteractComponent, this, InteractTraceType);//客户端仍然需要移除该检测类型
 			UpdateInteractTarget(nullptr, InteractTraceType);//广播交互事件
 		}
 	}
 
+	//进入事件判断
 	for (UIS_BeInteractComponent*& BeInteractCom : AllBeInteractCom)
 	{
 		if (BeInteractCom->TraceTypeCheck(InteractTraceType))
@@ -326,6 +387,213 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractCheckFromEnterTy
 	}
 
 	return AllBeInteractCom;
+}
+
+FVector UIS_InteractComponent::GetLocationFromTraceInfo(const FIS_InteractTypeInfo& TraceInfo, bool IsStartLocation)
+{
+	FVector ReturnVector;
+	EIS_TraceLocationType LocationType = TraceInfo.EndLocationType;
+	FVector Location = TraceInfo.End;
+	float Angle = TraceInfo.EndAngle;
+	float Distance = TraceInfo.EndDistance;
+	if (IsStartLocation)
+	{
+		LocationType = TraceInfo.StartLocationType;
+		Location = TraceInfo.Start;
+		Angle = TraceInfo.StartAngle;
+		Distance = TraceInfo.StartDistance;
+	}
+
+	switch (LocationType)
+	{
+	case EIS_TraceLocationType::OwnerLocation:
+	{
+		ReturnVector = GetOwner()->GetActorLocation() + Location;
+		break;
+	}
+	case EIS_TraceLocationType::OwnerAngle:
+	{
+		FRotator AngleRotator = FRotator(0.0f, Angle, 0.0f);
+		ReturnVector = GetOwner()->GetActorLocation() + AngleRotator.RotateVector(GetOwner()->GetActorForwardVector()) * Distance + Location;
+		break;
+	}
+	case EIS_TraceLocationType::CameraLocation:
+	{
+		APawn* Pawn = Cast<APawn>(GetOwner());
+		if (Pawn && Pawn->GetController())
+		{
+			FRotator CameraRotation;
+			Pawn->GetController()->GetPlayerViewPoint(ReturnVector, CameraRotation);
+			ReturnVector += Location;
+		}
+		break;
+	}
+	case EIS_TraceLocationType::CameraAngle:
+	{
+		APawn* Pawn = Cast<APawn>(GetOwner());
+		if (Pawn && Pawn->GetController())
+		{
+			FVector CameraLocation;
+			FRotator CameraRotation;
+			Pawn->GetController()->GetPlayerViewPoint(CameraLocation, CameraRotation);
+			FRotator AngleRotator = FRotator(0.0f, Angle, 0.0f);
+			ReturnVector = CameraLocation + AngleRotator.RotateVector(UKismetMathLibrary::GetForwardVector(CameraRotation)) * Distance + Location;
+		}
+		break;
+	}
+	case EIS_TraceLocationType::WorldLocation:
+	{
+		ReturnVector = Location;
+		break;
+	}
+	case EIS_TraceLocationType::DynamicGet:
+	{
+		ReturnVector = GetLocationFromTraceType(TraceInfo.InteractType, IsStartLocation) + Location;
+		break;
+	}
+	default:
+		break;
+	}
+
+	return ReturnVector;
+}
+
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractEnterCheckFromTraceInfo(FIS_InteractTypeInfo InteractTraceInfo)
+{
+	TArray<FHitResult> OutHit;
+	UIS_BeInteractComponent* TopPriorityCom = nullptr;
+	FText FailText;
+	FVector Start = GetLocationFromTraceInfo(InteractTraceInfo, true);
+	FVector End = GetLocationFromTraceInfo(InteractTraceInfo, false);
+
+	switch (InteractTraceInfo.InteractTraceType)
+	{
+	case EIS_TraceType::Line:
+	{
+		switch (InteractTraceInfo.BeTraceType)
+		{
+		case EIS_BeTraceType::Channel:
+		{
+			UKismetSystemLibrary::LineTraceMulti(this, Start, End, InteractTraceInfo.TraceChannel, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor, InteractTraceInfo.DrawTime);
+			break;
+		}
+		case EIS_BeTraceType::Objects:
+		{
+			UKismetSystemLibrary::LineTraceMultiForObjects(this, Start, End, InteractTraceInfo.ObjectTypes, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		case EIS_BeTraceType::Profile:
+		{
+			UKismetSystemLibrary::LineTraceMultiByProfile(this, Start, End, InteractTraceInfo.ProfileName, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	case EIS_TraceType::Sphere:
+	{
+		switch (InteractTraceInfo.BeTraceType)
+		{
+		case EIS_BeTraceType::Channel:
+		{
+			UKismetSystemLibrary::SphereTraceMulti(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.TraceChannel, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor, InteractTraceInfo.DrawTime);
+			break;
+		}
+		case EIS_BeTraceType::Objects:
+		{
+			UKismetSystemLibrary::SphereTraceMultiForObjects(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.ObjectTypes, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		case EIS_BeTraceType::Profile:
+		{
+			UKismetSystemLibrary::SphereTraceMultiByProfile(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.ProfileName, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	case EIS_TraceType::Box:
+	{
+		switch (InteractTraceInfo.BeTraceType)
+		{
+		case EIS_BeTraceType::Channel:
+		{
+			UKismetSystemLibrary::BoxTraceMulti(this, Start, End, InteractTraceInfo.HalfSize, InteractTraceInfo.Orientation, InteractTraceInfo.TraceChannel, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor, InteractTraceInfo.DrawTime);
+			break;
+		}
+		case EIS_BeTraceType::Objects:
+		{
+			UKismetSystemLibrary::BoxTraceMultiForObjects(this, Start, End, InteractTraceInfo.HalfSize, InteractTraceInfo.Orientation, InteractTraceInfo.ObjectTypes, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		case EIS_BeTraceType::Profile:
+		{
+			UKismetSystemLibrary::BoxTraceMultiByProfile(this, Start, End, InteractTraceInfo.HalfSize, InteractTraceInfo.Orientation, InteractTraceInfo.ProfileName, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	case EIS_TraceType::Capsule:
+	{
+		switch (InteractTraceInfo.BeTraceType)
+		{
+		case EIS_BeTraceType::Channel:
+		{
+			UKismetSystemLibrary::CapsuleTraceMulti(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.HalfHeight, InteractTraceInfo.TraceChannel, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor, InteractTraceInfo.DrawTime);
+			break;
+		}
+		case EIS_BeTraceType::Objects:
+		{
+			UKismetSystemLibrary::CapsuleTraceMultiForObjects(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.HalfHeight, InteractTraceInfo.ObjectTypes, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		case EIS_BeTraceType::Profile:
+		{
+			UKismetSystemLibrary::CapsuleTraceMultiByProfile(this, Start, End, InteractTraceInfo.Radius, InteractTraceInfo.HalfHeight, InteractTraceInfo.ProfileName, InteractTraceInfo.bTraceComplex, InteractTraceInfo.ActorsToIgnore, InteractTraceInfo.DrawDebugType, OutHit, InteractTraceInfo.bIgnoreSelf, InteractTraceInfo.TraceColor, InteractTraceInfo.TraceHitColor);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	return TraceOutHitVerify(InteractTraceInfo.InteractType, OutHit, TopPriorityCom, FailText);
+}
+
+FVector UIS_InteractComponent::GetLocationFromTraceType_Implementation(FGameplayTag TraceType, bool IsStartLocation)
+{
+	return FVector();
+}
+
+TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractEnterCheckFromTraceType_Implementation(FGameplayTag TraceType)
+{
+	TArray<UIS_BeInteractComponent*> AllBeInteractCom;
+	if (UIS_Config::GetInstance()->InteractTraceTypeMapping.Contains(TraceType))
+	{
+		AllBeInteractCom = InteractEnterCheckFromTraceInfo(UIS_Config::GetInstance()->InteractTraceTypeMapping[TraceType]);
+	}
+	return AllBeInteractCom;
+}
+
+void UIS_InteractComponent::AddInteractIgnoreTag(FGameplayTagContainer TagContainer)
+{
+	InteractIgnoreTag.AppendTags(TagContainer);
+}
+
+void UIS_InteractComponent::RemoveInteractIgnoreTag(FGameplayTagContainer TagContainer)
+{
+	InteractIgnoreTag.RemoveTags(TagContainer);
 }
 
 void UIS_InteractComponent::UpdateInteractTarget_Implementation(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType TraceType)

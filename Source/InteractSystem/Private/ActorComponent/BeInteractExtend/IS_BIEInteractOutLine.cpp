@@ -3,13 +3,15 @@
 
 #include "ActorComponent/BeInteractExtend/IS_BIEInteractOutLine.h"
 #include "ActorComponent/IS_BeInteractComponent.h"
+#include "ActorComponent/IS_InteractComponent.h"
+#include "TimerManager.h"
 
 void UIS_BIEInteractOutLine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UIS_BIEInteractOutLine, CustomDepthStencilValue_OutLine);
-	DOREPLIFETIME(UIS_BIEInteractOutLine, EnterInteractTraceType);
+	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineInteractTraceTypeInfo);
 	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineMeshComponnets);
 }
 
@@ -21,7 +23,7 @@ void UIS_BIEInteractOutLine::Init_Implementation(UIS_BeInteractComponent* BeInte
 	if(DataCom)
 	{
 		CustomDepthStencilValue_OutLine = DataCom->CustomDepthStencilValue_OutLine;
-		EnterInteractTraceType = DataCom->EnterInteractTraceType;
+		OutLineInteractTraceTypeInfo = DataCom->OutLineInteractTraceTypeInfo;
 	}
 
 	for (UActorComponent*& ActorCom : GetComponent())
@@ -32,19 +34,31 @@ void UIS_BIEInteractOutLine::Init_Implementation(UIS_BeInteractComponent* BeInte
 			OutLineMeshComponnets.Add(PrimitiveCom);
 		}
 	}
+
+	//主动调的这一次主要是为服务器设置
+	ReplicatedUsing_OutLineInteractTraceTypeInfo();
 }
 
 void UIS_BIEInteractOutLine::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
 {
 	Super::InteractEnter_Implementation(InteractComponent, TraceType);
 
-	if (EnterInteractTraceType.Contains(TraceType))
+	FText FailText;
+	if (OutLineInteractTraceTypeInfoMap.Contains(TraceType))
 	{
-		if (!CurEnterInteractTraceType.Contains(TraceType))
+		if (OutLineInteractTraceTypeInfoMap[TraceType].Verify(InteractComponent, BeInteractComponent, FailText))
 		{
-			CurEnterInteractTraceType.Add(TraceType);
-			ChangeOutLineCount(1);
+			if (!CurEnterInteractTraceType.Contains(TraceType))
+			{
+				CurEnterInteractTraceType.Add(TraceType);
+				ChangeOutLineCount(1);
+			}
 		}
+		else//只是验证不通过而不是不允许时，会开启间隔检测
+		{
+			OutLineBeVerifyInfoChange(true, FIS_OutLineBeVerifyInfo(InteractComponent, TraceType));
+		}
+
 	}
 }
 
@@ -52,13 +66,14 @@ void UIS_BIEInteractOutLine::InteractLeave_Implementation(UIS_InteractComponent*
 {
 	Super::InteractLeave_Implementation(InteractComponent, TraceType);
 
-	if (EnterInteractTraceType.Contains(TraceType))
+	if (OutLineInteractTraceTypeInfoMap.Contains(TraceType))
 	{
 		if (CurEnterInteractTraceType.Contains(TraceType))
 		{
 			CurEnterInteractTraceType.Remove(TraceType);
 			ChangeOutLineCount(-1);
 		}
+		OutLineBeVerifyInfoChange(false, FIS_OutLineBeVerifyInfo(InteractComponent, TraceType));
 	}
 }
 
@@ -119,4 +134,60 @@ int32 UIS_BIEInteractOutLine::ChangeOutLineCount(int32 AddOutLineNum)
 		}
 	}
 	return OutLineCount;
+}
+
+void UIS_BIEInteractOutLine::ReplicatedUsing_OutLineInteractTraceTypeInfo()
+{
+	for (FIS_OutLineInteractTraceTypeInfo& Info : OutLineInteractTraceTypeInfo)
+	{
+		OutLineInteractTraceTypeInfoMap.Add(Info.InteractTraceType, Info.InteractVerifyInfo);
+	}
+}
+
+void UIS_BIEInteractOutLine::OutLineCheckIntervalBack()
+{
+	for (FIS_OutLineBeVerifyInfo& VerifyInfo : AllOutLineBeVerifyInfo)
+	{
+		if (VerifyInfo.InteractComponent)
+		{
+			FText FailText;
+			if (OutLineInteractTraceTypeInfoMap[VerifyInfo.InteractTraceType].Verify(VerifyInfo.InteractComponent, BeInteractComponent, FailText))
+			{
+				if (!CurEnterInteractTraceType.Contains(VerifyInfo.InteractTraceType))
+				{
+					CurEnterInteractTraceType.Add(VerifyInfo.InteractTraceType);
+					ChangeOutLineCount(1);
+				}
+			}
+			else
+			{
+				if (CurEnterInteractTraceType.Contains(VerifyInfo.InteractTraceType))
+				{
+					CurEnterInteractTraceType.Remove(VerifyInfo.InteractTraceType);
+					ChangeOutLineCount(-1);
+				}
+			}
+		}
+	}
+}
+
+void UIS_BIEInteractOutLine::OutLineBeVerifyInfoChange(bool IsAdd, FIS_OutLineBeVerifyInfo VerifyInfo)
+{
+	if (IsAdd)
+	{
+		AllOutLineBeVerifyInfo.Add(VerifyInfo);
+	}
+	else
+	{
+		AllOutLineBeVerifyInfo.Remove(VerifyInfo);
+	}
+
+	if (AllOutLineBeVerifyInfo.Num() > 0)
+	{
+		GetWorld()->GetTimerManager().SetTimer(OutLineCheckTimeHandle, this, &UIS_BIEInteractOutLine::OutLineCheckIntervalBack, OutLineCheckInterval, true);
+	}
+	else
+	{
+		GetWorld()->GetTimerManager().ClearTimer(OutLineCheckTimeHandle);
+	}
 }

@@ -30,34 +30,33 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIgnoreSelf;
-
-	////只获取激活的可被交互组件
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	//bool bOnlyGetActiveComponent = false;
 };
 
-/*交互检测类型数组
+/*交互检测组件信息
 */
 USTRUCT(BlueprintType)
-struct FIS_InteractTraceTypeArray
+struct FIS_TraceCheckComponentInfo
 {
 	GENERATED_BODY()
 public:
-	EIS_InteractTraceType operator[](int32 Index) { return AllInteractTraceType[Index]; };
-	int32 Num() { return AllInteractTraceType.Num(); };
-	void Add(EIS_InteractTraceType TraceType) { AllInteractTraceType.Add(TraceType); };
-	void Remove(EIS_InteractTraceType TraceType){ AllInteractTraceType.Remove(TraceType); }
-	bool IsValidIndex(int32 Index) { return AllInteractTraceType.IsValidIndex(Index); };
+	FIS_TraceCheckComponentInfo(){}
+	FIS_TraceCheckComponentInfo(UIS_BeInteractComponent* BeInteractCom, EIS_InteractTraceType TraceType)
+	{ 
+		BeInteractComponent = BeInteractCom;
+		EnterTraceType = TraceType;
+	}
 
 public:
-	//是否仅交互一个资源
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TArray<EIS_InteractTraceType> AllInteractTraceType;
+	UIS_BeInteractComponent* BeInteractComponent;
+	//当前进入的检测类型
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_InteractTraceType EnterTraceType;
 };
 
 /*交互组件：该组件拥有交互其他资源的能力
 */
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+UCLASS(Blueprintable, BlueprintType, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class INTERACTSYSTEM_API UIS_InteractComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -94,9 +93,21 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void EndCurInteract();
 
-	//处理射线命中的全部交互组件
+	//交互条件检测
+	UFUNCTION(BlueprintPure)
+	bool InteractConditionCheck(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType InteractTraceType, FText& FailText);
+
+	//主动交互验证
+	UFUNCTION(BlueprintPure)
+	bool InteractVerify(UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceType, FText& FailText);
+
+	//处理射线命中的内容，提取通过检测的交互组件
 	UFUNCTION()
-	TArray<UIS_BeInteractComponent*> TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, FIS_InteractRayInfo InteractRayInfo, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom);
+	TArray<UIS_BeInteractComponent*> TraceOutHitCheck(EIS_InteractTraceType InteractTraceType, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText);
+
+	//处理射线命中的内容，提取通过检测的交互组件
+	UFUNCTION()
+	TArray<UIS_BeInteractComponent*> TraceOutHitVerify(FGameplayTag TraceType, const TArray<FHitResult>& OutHit, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText);
 
 	/*通过检测类型获取当前交互检测组件
 	* InteractTraceType：检测类型，该值为None时对比当前全部的可被交互组件
@@ -115,7 +126,7 @@ public:
 	* TopPriorityCom：最高交互优先级的交互组件
 	*/
 	UFUNCTION(BlueprintCallable)
-	TArray<UIS_BeInteractComponent*> CameraTraceGetBeInteractCom(FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom);
+	TArray<UIS_BeInteractComponent*> CameraTraceGetBeInteractCom(FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText);
 
 	//尝试从摄像机发射射线触发交互
 	UFUNCTION(BlueprintCallable)
@@ -126,7 +137,7 @@ public:
 	* return：全部命中的可被交互组件
 	*/
 	UFUNCTION(BlueprintCallable)
-	TArray<UIS_BeInteractComponent*> SphereTraceGetBeInteractCom(FVector Start, FVector End, float Radius, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom);
+	TArray<UIS_BeInteractComponent*> SphereTraceGetBeInteractCom(FVector Start, FVector End, float Radius, FIS_InteractRayInfo InteractRayInfo, UIS_BeInteractComponent*& TopPriorityCom, FText& FailText);
 
 	//尝试使用圆形检测触发交互
 	UFUNCTION(BlueprintCallable)
@@ -138,13 +149,30 @@ public:
 
 	//交互检测——检测周围/准心是否有可交互的资源
 	UFUNCTION(BlueprintCallable)
-	void InteractCheck();
+	void InteractEnterCheck();
 
 	/*根据进入类型进行交互检测
 	* Return：检测到的全部可交互组件
 	*/
 	UFUNCTION(BlueprintCallable)
 	TArray<UIS_BeInteractComponent*> InteractCheckFromEnterType(EIS_InteractTraceType InteractTraceType);
+
+	UFUNCTION()
+	FVector GetLocationFromTraceInfo(const FIS_InteractTypeInfo& TraceInfo, bool IsStartLocation);
+
+	/*根据检测ID动态获取位置
+	* 需要子类根据需求去返回不同ID下的位置信息
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure)
+	FVector GetLocationFromTraceType(FGameplayTag TraceType, bool IsStartLocation);
+	virtual FVector GetLocationFromTraceType_Implementation(FGameplayTag TraceType, bool IsStartLocation);
+
+	UFUNCTION(BlueprintCallable)
+	TArray<UIS_BeInteractComponent*> InteractEnterCheckFromTraceInfo(FIS_InteractTypeInfo InteractTraceInfo);
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	TArray<UIS_BeInteractComponent*> InteractEnterCheckFromTraceType(UPARAM(Meta = (Categories = "InteractType")) FGameplayTag TraceType);
+	virtual TArray<UIS_BeInteractComponent*> InteractEnterCheckFromTraceType_Implementation(FGameplayTag TraceType);
 
 	//更新交互目标
 	UFUNCTION(NetMulticast, Reliable)
@@ -168,6 +196,16 @@ public:
 	UFUNCTION(BlueprintCallable, Server, Reliable)
 	void ServerLeaveInteractCheck(UIS_BeInteractComponent* BeInteractComponent, EIS_InteractTraceType InteractTraceType);
 
+	/*添加忽略Tag
+	*/
+	UFUNCTION(BlueprintCallable)
+	void AddInteractIgnoreTag(FGameplayTagContainer TagContainer);
+
+	/*移除忽略Tag
+	*/
+	UFUNCTION(BlueprintCallable)
+	void RemoveInteractIgnoreTag(FGameplayTagContainer TagContainer);
+
 public:
 	//该Actor的角色签名（角色唯一标识-通常是ID/或者玩家ID
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -176,6 +214,12 @@ public:
 	//交互失败音效
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSoftObjectPtr<USoundBase> InteractFailSound;
+
+	/*交互忽略tag
+	* 会用该值和要交互的目标FIS_BeInteractInfo的InteractTag做比较，如果对方存在则忽略
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")
+	FGameplayTagContainer InteractIgnoreTag;
 
 	//射线的距离
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace")
@@ -194,7 +238,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
 	FLinearColor TraceHitColor = FLinearColor::Green;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|DeBug")
-	float DrawTime;
+	float DrawTime = 1.0f;
 
 	//-------------------交互检测信息-------------------
 	//在BeginPlay时是否要激活交互检测
@@ -205,6 +249,12 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
 	TArray<EIS_InteractTraceType> InteractCheckTypes = { EIS_InteractTraceType::CameraTrace };
+
+	/*要进行交互检测的全部类型，同时也是检测顺序
+	* 数组越前的类型越早检测
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
+	TArray<FIS_InteractTypeInfo> AllInteractTypeInfo;
 	
 	UPROPERTY()
 	FTimerHandle InteractCheckTimeHandle;
@@ -214,9 +264,9 @@ public:
 	//交互检测射线的信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trace|InteractCheck")
 	FIS_InteractRayInfo InteractCheckRayInfo;
-	//当前交互检测的目标
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite/*, Replicated*/)
-	TArray<UIS_BeInteractComponent*> InteractCheckComponents;
+	//当前检测到的全部组件
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+	TArray<FIS_TraceCheckComponentInfo> AllTraceCheckComponent;
 
 	UPROPERTY(BlueprintAssignable)
 	FIS_InteractEvent UpdateInteractEvent;

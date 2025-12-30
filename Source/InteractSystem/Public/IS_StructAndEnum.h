@@ -5,7 +5,6 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Common/IS_Config.h"
 #include "GameplayTagContainer.h"
-//#include "../../../../../CommonCompare/Source/CommonCompare/Public/CC_StructAndEnum.h"
 #include <CC_StructAndEnum.h>
 #include "IS_StructAndEnum.generated.h"
 
@@ -51,11 +50,13 @@ enum class EIS_InteractCumulativeTimeType :uint8
 {
 	NotCumulative = 0 UMETA(DisplayName = "不累计"),
 	//按照CumulativeTimeInterval的值不断累计
-	Interval UMETA(DisplayName = "按间隔累计"),
+	IntervalAdd UMETA(DisplayName = "按间隔累计增加"),
 	/*根据InteractTime数组的每个下标进行阶段累计
 	* 需要注意的是该类型只有当InteractTime的长度 > 2 时生效
 	*/
-	InteractTimeIndex UMETA(DisplayName = "按分段累计")
+	InteractTimeIndex UMETA(DisplayName = "按分段累计"),
+
+	IntervalReduce = 10 UMETA(DisplayName = "按间隔累计减少")
 };
 
 //被交互资源能被触发“进入”事件的类型
@@ -66,15 +67,6 @@ enum class EIS_BeInteractCheckType :uint8
 	AnyTrigger UMETA(DisplayName = "可触发"),
 	//当检测到多个可被交互的资源时，只有交互优先级最高的资源会触发“进入”事件
 	TopPriorityTrigger UMETA(DisplayName = "最高优先级可触发")
-};
-
-//交互检测的类型
-UENUM(BlueprintType)
-enum class EIS_InteractTraceType :uint8
-{
-	None = 0 UMETA(DisplayName = "空"),
-	CameraTrace UMETA(DisplayName = "摄像机射线检测"),
-	SphereTrace UMETA(DisplayName = "球形检测")
 };
 
 //被交互的类型
@@ -113,7 +105,7 @@ public:
 	bool bRoleNumVerifyIsNowOrHistory = true;
 	//验证交互人数是否满足的间隔
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_CompleteInteractRoleNumVerify"))
-	float VerifyInteractRoleNumTimeInterval = 0.1;
+	float VerifyInteractRoleNumTimeInterval = 0.5;
 
 	/*完成交互额外需要的验证类
 	* 该验证类可以是UI或者其他——例如QTEUI、3D场景解密
@@ -134,8 +126,26 @@ struct FIS_InteractVerifyInfo
 public:
 	bool Verify(UActorComponent* InteractComponent, UActorComponent* BeInteractComponent, FText& FailText);
 	bool DistanceVerify(UActorComponent* InteractComponent, UActorComponent* BeInteractComponent, FText& FailText);
-	bool AngleVerify(UActorComponent* InteractComponent, UActorComponent* BeInteractComponent, FText& FailText);
+	bool BeInteractAngleVerifyCheck(UActorComponent* InteractComponent, UActorComponent* BeInteractComponent, FText& FailText);
+	bool InteractorsAngleVerifyCheck(UActorComponent* InteractComponent, UActorComponent* BeInteractComponent, FText& FailText);
 public:
+
+	/*是否能显示交互UI 后续考虑该值是否换成UIclas
+	* 该值在C++部分没用获取，意为在蓝图显示UI时获取
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsDisplayInteractUI = true;
+	//检测类型
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EIS_BeInteractCheckType InteractCheckType = EIS_BeInteractCheckType::AnyTrigger;
+
+	//激活时才能被检测
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsActiveTraceCheck = true;
+
+	//通过比对（Compare）的才会被检测
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsCompareTraceCheck = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
 	bool bOverride_InteractDistanceVerify = false;
@@ -149,15 +159,32 @@ public:
 	FText InteractDistance_FailText;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
-	bool bOverride_InteractAngleVerify = false;
-	/*交互时的角度验证 某侧门不能开启/暗杀等交互需求可以对该值进行设置
-	* 设置后交互者必须与该资源X轴的夹角处于该值范围内才允许交互
+	bool bOverride_BeInteractAngleVerify = false;
+	/*交互时的【被交互者】角度验证（以被交互目标为主的角度验证）
+	* 设置后交互者必须与该资源X轴的夹角处于该值范围内才允许交互（取值范围是0~360）
+	* 某侧门不能开启/暗杀等交互需求可以对该值进行设置
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_InteractAngleVerify"))
-	FFloatRange InteractAngleVerify;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_BeInteractAngleVerify"))
+	FFloatRange BeInteractAngleVerify;
 	//角度验证失败的文本提示
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_InteractAngleVerify"))
-	FText InteractAngle_FailText;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_BeInteractAngleVerify"))
+	FText BeInteractAngle_FailText;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
+	bool bOverride_InteractorsAngleVerify = false;
+	/*交互时的【交互者】角度验证（以交互者为主的角度验证）
+	* 设置后交互者前方和被交互者指向交互者之间的夹角处于该值范围内才允许交互（取值范围是0~180）
+	* 通常该项是给圆形检测使用的，用于判定某个交互目标在我前方的某个夹角
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_InteractorsAngleVerify"))
+	FFloatRange InteractorsAngleVerify;
+	/*交互者的前方基准
+	* 该值为true时使用角色前方，否则使用相机前方
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_InteractorsAngleVerify"))
+	bool bAngleFrontIsActorOrCamera = true;
+	//角度验证失败的文本提示
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_InteractorsAngleVerify"))
+	FText InteractorsAngle_FailText;
 
 };
 
@@ -217,6 +244,12 @@ public:
 	//RowName
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FName RowName;
+
+#if WITH_EDITORONLY_DATA
+	//行名称对应的数据表
+	UPROPERTY(VisibleAnywhere)
+	TSoftObjectPtr<UDataTable> DataTable;
+#endif
 };
 
 /*可被交互物的扩展配置
@@ -256,7 +289,10 @@ struct FIS_BeInteractCheckCondition
 {
 	GENERATED_BODY()
 public:
-	//
+	//是否能显示交互UI 后续考虑该值是否换成UIclas
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsDisplayInteractUI = true;
+	//检测类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_BeInteractCheckType InteractCheckType = EIS_BeInteractCheckType::AnyTrigger;
 
@@ -270,9 +306,12 @@ public:
 	//通过【距离】验证（Verify）的才会被检测
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsVerifyTraceCheck"))
 	bool bIsDistanceVerifyTraceCheck = true;
-	//通过【角度】验证（Verify）的才会被检测
+	//通过【被交互者】的【角度】验证（Verify）的才会被检测
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsVerifyTraceCheck"))
-	bool bIsAngleVerifyTraceCheck = true;
+	bool bIsBeInteractAngleVerifyTraceCheck = true;
+	//通过【交互者】的【角度】验证（Verify）的才会被检测
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsVerifyTraceCheck"))
+	bool bIsInteractorsAngleVerifyTraceCheck = true;
 
 	//通过比对（Compare）的才会被检测
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -287,10 +326,26 @@ struct FIS_BeInteractInfoHandle
 {
 	GENERATED_BODY()
 public:
+	bool operator==(const FIS_BeInteractInfoHandle& BeInteractInfoHandle)
+	{
+		return RowName == BeInteractInfoHandle.RowName;
+	}
+public:
 	//RowName
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FName RowName;
+
+#if WITH_EDITORONLY_DATA
+	//行名称对应的数据表
+	UPROPERTY(VisibleAnywhere)
+	TSoftObjectPtr<UDataTable> DataTable;
+#endif
 };
+
+FORCEINLINE uint32 GetTypeHash(const FIS_BeInteractInfoHandle& Key)
+{
+	return GetTypeHash(Key.RowName);
+}
 
 /*被交互的信息
 * 通常是可配置的初始化信息
@@ -352,6 +407,13 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FIS_InteractVerifyInfo InteractVerifyInfo;
+	/*对于不同类型下的交互验证信息
+	* 不添加表示该类型不会触发
+	* 该Map为空时进入/检测事件不会触发
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (Categories = "InteractType"))
+	TMap<FGameplayTag, FIS_InteractVerifyInfo> InteractTypeVerifyInfo;
+
 	/*交互完成时的验证信息
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -434,10 +496,6 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TMap<EIS_InteractTraceType, FIS_BeInteractCheckCondition> InteractCheckEnterCondition;
-
-	////“我”能被交互被检测到的条件
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	//FIS_BeInteractCheckCondition InteractCheckCondition;
 
 	/*可被交互物的扩展功能
 	*/

@@ -46,3 +46,4 @@ bool UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(FIS_BeInteractE
 	}
 	return false;
 }
+

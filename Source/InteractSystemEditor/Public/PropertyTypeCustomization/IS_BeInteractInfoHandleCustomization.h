@@ -38,6 +38,9 @@ public:
 
     //反射出来的结构体数据
     FIS_BeInteractInfoHandle* IS_BeInteractInfoHandle;
+
+    //对应的数据表
+    TSharedPtr<IPropertyHandle> DataTableHandle;
 };
 
 
@@ -71,4 +74,7 @@ public:
 
     //反射出来的结构体数据
     FIS_BeInteractExtendHandle* IS_BeInteractExtendHandle;
+
+    //对应的数据表
+    TSharedPtr<IPropertyHandle> DataTableHandle;
 };

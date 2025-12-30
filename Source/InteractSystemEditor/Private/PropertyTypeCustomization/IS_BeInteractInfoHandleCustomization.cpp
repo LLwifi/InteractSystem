@@ -33,6 +33,8 @@ void IIS_BeInteractInfoHandleCustomization::CustomizeChildren(TSharedRef<IProper
     if (ValuePtr != nullptr)
     {
         IS_BeInteractInfoHandle = (FIS_BeInteractInfoHandle*)ValuePtr;
+        IS_BeInteractInfoHandle->DataTable = UIS_Config::GetInstance()->BeInteractInfoDataTable;
+        DataTableHandle = PropertyHandle->GetChildHandle("DataTable");
     }
 
     //Refresh(RowNames, ResourceNameOrIndexs);
@@ -61,6 +63,14 @@ void IIS_BeInteractInfoHandleCustomization::CustomizeChildren(TSharedRef<IProper
                     [
                         SAssignNew(ComboBox_Name_Text, STextBlock)
                             .Text(FText::FromString(IS_BeInteractInfoHandle->RowName.ToString()))
+                    ]
+            ]
+            + SVerticalBox::Slot().AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth()
+                    [
+                        DataTableHandle->CreatePropertyValueWidget()
                     ]
             ]
         ];
@@ -102,6 +112,8 @@ void IIS_BeInteractExtendHandleCustomization::CustomizeChildren(TSharedRef<IProp
     if (ValuePtr != nullptr)
     {
         IS_BeInteractExtendHandle = (FIS_BeInteractExtendHandle*)ValuePtr;
+        IS_BeInteractExtendHandle->DataTable = UIS_Config::GetInstance()->BeInteractExtendDataTable;
+        DataTableHandle = PropertyHandle->GetChildHandle("DataTable");
     }
 
     //Refresh(RowNames, ResourceNameOrIndexs);
@@ -130,6 +142,14 @@ void IIS_BeInteractExtendHandleCustomization::CustomizeChildren(TSharedRef<IProp
                         [
                             SAssignNew(ComboBox_Name_Text, STextBlock)
                                 .Text(FText::FromString(IS_BeInteractExtendHandle->RowName.ToString()))
+                        ]
+                ]
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot().AutoWidth()
+                        [
+                            DataTableHandle->CreatePropertyValueWidget()
                         ]
                 ]
         ];

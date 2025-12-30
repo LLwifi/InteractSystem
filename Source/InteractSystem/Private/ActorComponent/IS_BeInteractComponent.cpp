@@ -89,20 +89,7 @@ void UIS_BeInteractComponent::BeginPlay()
 
 		UseBeInteractExtend.Append(AddBeInteractExtendHandles);
 
-		for (FIS_BeInteractExtendHandle& BeInteractExtendHandle : UseBeInteractExtend)
-		{
-			FIS_BeInteractExtend BeInteractExtendInfo;
-			UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(BeInteractExtendHandle, BeInteractExtendInfo);
-			if (BeInteractExtendInfo.BeInteractExtendClass)
-			{
-				UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
-				if (BeInteractExtend)
-				{
-					BeInteractExtend->Init(this, BeInteractExtendInfo.BeInteractExtend);
-					AllExtend.Add(BeInteractExtend);
-				}
-			}
-		}
+		CreateBeInteractExtendFromHandle(UseBeInteractExtend);
 	}
 
 	IIS_BeInteractInterface::Execute_SetInteractTime(this, BeInteractInfo.InteractTime);
@@ -258,7 +245,7 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 		{
 			IsRoleHaveInteractNum = BeInteractDynamicInfo.GetInteractCountFromRoleSign(InteractComponent->GetRoleSign()) < BeInteractInfo.EveryoneInteractlNum;
 		}
-		if (IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0 && IsRoleHaveInteractNum)//交互次数是否足够
+		if (IsRoleHaveInteractNum && IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0)//交互次数是否足够
 		{
 			if (BeInteractDynamicInfo.AllInteractComponent.Num() <= BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 			{
@@ -584,7 +571,6 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	if (!BeInteractDynamicInfo.bIsComplete)
 	{
 		//没完成交互的话，判断还有其他人在交互吗
-
 		if (BeInteractOtherInfo.InteractTimerHandle.Contains(InteractComponent->GetRoleSign()))//我结束时有没有与被交互目标产生过TimerHandle
 		{
 			GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractTimerHandle[InteractComponent->GetRoleSign()]);
@@ -603,7 +589,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 			BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
 			break;
 		}
-		case EIS_InteractCumulativeTimeType::Interval://按间隔累计
+		case EIS_InteractCumulativeTimeType::IntervalAdd://按间隔累计
 		{
 			//间隔累计 每个交互者的交互时间和统一交互时间都不管
 			break;
@@ -1041,7 +1027,15 @@ void UIS_BeInteractComponent::InteractTraceCheck_Implementation(EIS_InteractTrac
 	}
 	else
 	{
-		BeInteractDynamicInfo.AllEnterTraceType.Remove(TraceType);
+		//在离开时若传递进来的检测类型为None表示全部清楚，这样做是为了在清空时避免重复调用该函数对多个类型进行删除
+		if (TraceType == EIS_InteractTraceType::None)
+		{
+			BeInteractDynamicInfo.AllEnterTraceType.Empty();
+		}
+		else
+		{
+			BeInteractDynamicInfo.AllEnterTraceType.Remove(TraceType);
+		}
 	}
 }
 
@@ -1272,4 +1266,22 @@ bool UIS_BeInteractComponent::CanInteract_Extend(UIS_InteractComponent* Interact
 		}
 	}
 	return true;
+}
+
+void UIS_BeInteractComponent::CreateBeInteractExtendFromHandle(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle)
+{
+	for (FIS_BeInteractExtendHandle& Handle : BeInteractExtendHandle)
+	{
+		FIS_BeInteractExtend BeInteractExtendInfo;
+		UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(Handle, BeInteractExtendInfo);
+		if (BeInteractExtendInfo.BeInteractExtendClass)
+		{
+			UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
+			if (BeInteractExtend)
+			{
+				BeInteractExtend->Init(this, BeInteractExtendInfo.BeInteractExtend);
+				AllExtend.Add(BeInteractExtend);
+			}
+		}
+	}
 }
