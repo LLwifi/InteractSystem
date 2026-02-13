@@ -10,30 +10,42 @@
 
 class UIS_BeInteractExtendBase;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInteractDelegate, UIS_InteractComponent*, InteractComponent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractDelegate, UIS_InteractComponent*, InteractComponent, FGameplayTag, TraceTypeTag);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractVerifyDelegate, UIS_InteractComponent*, InteractComponent, UObject*, VerifyObject);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractEnterOrLeaveDelegate, UIS_InteractComponent*, InteractComponent, EIS_InteractTraceType, TraceType);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractEnterOrLeaveDelegate, UIS_InteractComponent*, InteractComponent, FGameplayTag, TraceTypeTag);
 
-/*被交互的其他信息
-* 通常是不需要配置，可能是代码或者逻辑层面需要保存的变量
+/*某个签名被交互的其他信息
 */
 USTRUCT(BlueprintType)
-struct FIS_BeInteractOtherInfo
+struct FIS_InteractRoleSignInfo
 {
 	GENERATED_BODY()
 public:
-	//<角色签名,触发的TimeHandle>
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TMap<FName, FTimerHandle> InteractTimerHandle;
+	FName RoleSign;
+	//交互组件
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UIS_InteractComponent* InteractComponent;
 
-	//验证人数的Timer
+	//触发的TimeHandle
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FTimerHandle InteractRoleNumVerifyTimerHandle;
+	FTimerHandle InteractTimerHandle;
+	//交互时的TypeTag
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FGameplayTag InteractTypeTag;
+	//交互了多少次-每交互完成后算1次
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 InteractCount = 0;
 };
 
 /*被交互组件：该组件描述一个可以被交互的资源的基本信息
 * 需要注意如果要进行网络同步，添加该组件的Actor也需要开启网络同步
 * 待解决问题：扩展完全由外部管理的开始-结束-完成	交互CD	交互锁定		交互选择/多选		交互速度
+* 生命周期
+* InteractEnter -》 InteractLeave
+* InteractStart -》 InteractAttachTo -》 InteractAttachDetach
+* InteractComplete -》 InteractComplete_MultiSegment
+* InteractEnd
 */
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class INTERACTSYSTEM_API UIS_BeInteractComponent : public UStaticMeshComponent, public IIS_BeInteractInterface
@@ -56,13 +68,20 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void BeginDestroy() override;
+	virtual void DestroyComponent(bool bPromoteChildren) override;
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	UFUNCTION()
+	void ReplicatedUsing_AllExtend();
+
 	//-----------------------------------------------------IIS_Interface
 	virtual FIS_BeInteractInfo GetBeInteractInfo_Implementation() override;
 	virtual FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo_Implementation() override;
+	virtual FIS_BeInteractUIInfo GetInteractUIInfo_Implementation() override;
+	virtual FIS_BeInteractUIInfo SetInteractUIInfo_Implementation(FIS_BeInteractUIInfo UIInfo) override;
 	virtual bool IsDisplayInteractText_Implementation() override;
 	virtual FText GetInteractText_Implementation() override;
 	virtual void SetInteractText_Implementation(const FText& InteractText) override;
@@ -89,37 +108,37 @@ public:
 	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent) override;
 	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass) override;
-	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
+	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//移入可交互目标——仅自主客户端触发该事件
 	UPROPERTY(BlueprintAssignable)
 	FInteractEnterOrLeaveDelegate OnInteractEnter;
-	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) override;
+	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//移出可交互目标——仅自主客户端触发该事件
 	UPROPERTY(BlueprintAssignable)
 	FInteractEnterOrLeaveDelegate OnInteractLeave;
 	virtual bool InteractLeaveIsEnd_Implementation() override;
-	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//开始交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractStart;
-	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//结束交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractEnd;
-	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//完成交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractComplete;
-	virtual void InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//多段完成交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractComplete_MultiSegment;
 
-	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//挂载交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractAttachTo;
-	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//分离挂载交互
 	UPROPERTY(BlueprintAssignable)
 	FInteractDelegate OnInteractAttachDetach;
@@ -132,29 +151,29 @@ public:
 	void NetMulti_OnInteractVerify(UIS_InteractComponent* InteractComponent, UObject* VerifyObject);
 
 	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	void NetClient_OnInteractEnter(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	void NetMulti_OnInteractEnter(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	UFUNCTION(Client, Reliable)
-	void NetClient_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	void NetClient_OnInteractLeave(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_OnInteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
+	void NetMulti_OnInteractLeave(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	UFUNCTION()
-	void CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
+	void CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(Client, Reliable)
-	void NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
+	void NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent);
+	void NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	//根据扩展应用类型调用对应的RPC函数
 	UFUNCTION()
-	void CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
+	void CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(Client, Reliable)
-	void NetClient_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
+	void NetClient_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 	UFUNCTION(NetMulticast, Reliable)
-	void NetMulti_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent);
+	void NetMulti_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	//-----------------------------------------------------------------------------------------Net
 	/*通过配置名称获取蒙太奇
@@ -174,12 +193,12 @@ public:
 	UFUNCTION(BlueprintPure)
 	float GetInteractMontageSectionLengthFromName(UAnimMontage* Montage, FName SectionName);
 
-	/*Trace的进入和移出
+	/*不同TraceType的进入和移出
 	* 该函数可能会被频繁调用
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-		void InteractTraceCheck(EIS_InteractTraceType TraceType, bool IsEnter = true);
-	virtual void InteractTraceCheck_Implementation(EIS_InteractTraceType TraceType, bool IsEnter = true);
+		void InteractTraceTypeEnterOrLeave(FGameplayTag TraceTypeTag, bool IsEnter = true);
+	virtual void InteractTraceTypeEnterOrLeave_Implementation(FGameplayTag TraceTypeTag, bool IsEnter = true);
 
 	/*创建交互验证对象——UI
 	* 需要注意的是UI只能在客户端创建
@@ -199,7 +218,7 @@ public:
 	* return : 验证是否通过/是否成功调用了交互完成
 	*/
 	UFUNCTION(BlueprintCallable)
-	bool TryInteractComplete(UIS_InteractComponent* InteractComponent);
+	bool TryInteractComplete(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	//获取“我”的前方与目标向量/方向之间的夹角
 	UFUNCTION(BlueprintPure)
@@ -219,16 +238,16 @@ public:
 	* BackTime：回调的时间
 	*/
 	UFUNCTION()
-	UIS_InteractComponent* FindCompleteInteractComponent(float BackTime);
+	UIS_InteractComponent* FindCompleteInteractComponent(float BackTime, FIS_InteractRoleSignInfo& RoleSignInfo);
 
-	/*检测类型是否通过 允许该类型的检测且没有触发过“进入”事件时才会返回true
-	* BeInteractInfo.InteractEnterTriggerType 不包含该类型表示不接受该类型的检测
+	/*检测类型是否通过 
+	* BeInteractInfo.InteractTypeVerifyInfo 不包含该类型表示不接受该类型的检测 返回为false
 	* IsEnter：这次判断是进入还是离开
-	* 该值为true时，表示进入——BeInteractDynamicInfo.AllEnterTraceType 未包含该类型表示该类型可以触发“进入”事件
-	* 该值为false时，表示离开——BeInteractDynamicInfo.AllEnterTraceType 包含该类型表示该类型可以触发“离开”事件
+	* 该值为true时，表示进入——BeInteractDynamicInfo.AllEnterTraceTypeTag 未包含该类型表示该类型可以触发“进入”事件
+	* 该值为false时，表示离开——BeInteractDynamicInfo.AllEnterTraceTypeTag 包含该类型表示该类型可以触发“离开”事件
 	*/
 	UFUNCTION(BlueprintPure)
-	bool TraceTypeCheck(EIS_InteractTraceType TraceType, bool IsEnter = true);
+	bool TraceTypeCheck(FGameplayTag TraceTypeTag, bool IsEnter = true);
 
 	//检测全部扩展类是否允许交互
 	UFUNCTION(BlueprintPure)
@@ -238,10 +257,20 @@ public:
 	* 注意：开启了网络同步后，在服务器创建会将扩展同步给其他端
 	*/
 	UFUNCTION(BlueprintCallable)
-	void CreateBeInteractExtendFromHandle(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle);
+	void AddBeInteractExtendFromHandle_Array(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle);
+
+	UFUNCTION(BlueprintCallable)
+	void AddBeInteractExtendFromHandle(FIS_BeInteractExtendHandle BeInteractExtendHandle);
+
+	UFUNCTION(BlueprintCallable)
+	void AddBeInteractExtend(UIS_BeInteractExtendBase* BeInteractExtend);
+
+	//通过类型获取扩展
+	UFUNCTION(BlueprintCallable, meta = (DeterminesOutputType = "ExtendClass"))
+	UIS_BeInteractExtendBase* GetExtendFromClass(TSubclassOf<UIS_BeInteractExtendBase> ExtendClass);
 public:
 	/*交互相关事件的网络复制决策
-	* 使用改功能必须保证其Owner具有网络复制的能力，否则该项改动无效
+	* 使用该功能必须保证其Owner具有网络复制的能力，否则该项改动无效
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractEventNetType InteractEventNetType = EIS_InteractEventNetType::Server;
@@ -279,16 +308,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	FIS_BeInteractDynamicInfo BeInteractDynamicInfo;
 
-	//被交互的其他信息
+	//被交互的交互签名信息<角色签名,签名信息>
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FIS_BeInteractOtherInfo BeInteractOtherInfo;
+	TMap<FName, FIS_InteractRoleSignInfo> InteractRoleSignInfo;
+
+	//当前的交互签名信息
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FIS_InteractRoleSignInfo CurInteractRoleSignInfo;
+
+	//验证人数的Timer
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FTimerHandle InteractRoleNumVerifyTimerHandle;
 
 	//不同交互者的不同累计时间，由于Map不可复制，该值仅在服务器上存在
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 	TMap<FName,float> ServerInteracterCumulativeTime;
 
 	//全部扩展
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Replicated)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, ReplicatedUsing = ReplicatedUsing_AllExtend)
 	TArray<UIS_BeInteractExtendBase*> AllExtend;
 	
 };

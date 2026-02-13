@@ -11,8 +11,10 @@ void UIS_BIEInteractOutLine::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UIS_BIEInteractOutLine, CustomDepthStencilValue_OutLine);
-	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineInteractTraceTypeInfo);
+	DOREPLIFETIME(UIS_BIEInteractOutLine, RealTimeRefresh);
+	DOREPLIFETIME(UIS_BIEInteractOutLine, DelayRefreshTime);
 	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineMeshComponnets);
+	DOREPLIFETIME(UIS_BIEInteractOutLine, OutLineInteractTraceTypeTags);
 }
 
 void UIS_BIEInteractOutLine::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
@@ -23,57 +25,55 @@ void UIS_BIEInteractOutLine::Init_Implementation(UIS_BeInteractComponent* BeInte
 	if(DataCom)
 	{
 		CustomDepthStencilValue_OutLine = DataCom->CustomDepthStencilValue_OutLine;
-		OutLineInteractTraceTypeInfo = DataCom->OutLineInteractTraceTypeInfo;
+		OutLineInteractTraceTypeTags = DataCom->OutLineInteractTraceTypeTags;
+		RealTimeRefresh = DataCom->RealTimeRefresh;
+		DelayRefreshTime = DataCom->DelayRefreshTime;
 	}
 
-	for (UActorComponent*& ActorCom : GetComponent())
+	if (!RealTimeRefresh)
 	{
-		UPrimitiveComponent* PrimitiveCom = Cast<UPrimitiveComponent>(ActorCom);
-		if (PrimitiveCom)
+		if (DelayRefreshTime > 0.0f)
 		{
-			OutLineMeshComponnets.Add(PrimitiveCom);
+			GetWorld()->GetTimerManager().SetTimer(DelayRefreshTimeHandle, this, &UIS_BIEInteractOutLine::RefreshOutLineMeshComponnet, DelayRefreshTime);
+		}
+		else
+		{
+			RefreshOutLineMeshComponnet();
 		}
 	}
-
-	//主动调的这一次主要是为服务器设置
-	ReplicatedUsing_OutLineInteractTraceTypeInfo();
 }
 
-void UIS_BIEInteractOutLine::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BIEInteractOutLine::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	Super::InteractEnter_Implementation(InteractComponent, TraceType);
+	Super::InteractEnter_Implementation(InteractComponent, TraceTypeTag);
+
+	if (RealTimeRefresh)
+	{
+		RefreshOutLineMeshComponnet();
+	}
 
 	FText FailText;
-	if (OutLineInteractTraceTypeInfoMap.Contains(TraceType))
+	if (OutLineInteractTraceTypeTags.HasTagExact(TraceTypeTag))
 	{
-		if (OutLineInteractTraceTypeInfoMap[TraceType].Verify(InteractComponent, BeInteractComponent, FailText))
+		if (!CurEnterInteractTraceTypeTags.HasTagExact(TraceTypeTag))
 		{
-			if (!CurEnterInteractTraceType.Contains(TraceType))
-			{
-				CurEnterInteractTraceType.Add(TraceType);
-				ChangeOutLineCount(1);
-			}
+			CurEnterInteractTraceTypeTags.AddTag(TraceTypeTag);
+			ChangeOutLineCount(1);
 		}
-		else//只是验证不通过而不是不允许时，会开启间隔检测
-		{
-			OutLineBeVerifyInfoChange(true, FIS_OutLineBeVerifyInfo(InteractComponent, TraceType));
-		}
-
 	}
 }
 
-void UIS_BIEInteractOutLine::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BIEInteractOutLine::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	Super::InteractLeave_Implementation(InteractComponent, TraceType);
+	Super::InteractLeave_Implementation(InteractComponent, TraceTypeTag);
 
-	if (OutLineInteractTraceTypeInfoMap.Contains(TraceType))
+	if (OutLineInteractTraceTypeTags.HasTagExact(TraceTypeTag))
 	{
-		if (CurEnterInteractTraceType.Contains(TraceType))
+		if (CurEnterInteractTraceTypeTags.HasTagExact(TraceTypeTag))
 		{
-			CurEnterInteractTraceType.Remove(TraceType);
+			CurEnterInteractTraceTypeTags.RemoveTag(TraceTypeTag);
 			ChangeOutLineCount(-1);
 		}
-		OutLineBeVerifyInfoChange(false, FIS_OutLineBeVerifyInfo(InteractComponent, TraceType));
 	}
 }
 
@@ -82,27 +82,27 @@ bool UIS_BIEInteractOutLine::InteractLeaveIsEnd_Implementation()
 	return false;
 }
 
-void UIS_BIEInteractOutLine::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
-void UIS_BIEInteractOutLine::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
-void UIS_BIEInteractOutLine::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
-void UIS_BIEInteractOutLine::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
-void UIS_BIEInteractOutLine::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
-void UIS_BIEInteractOutLine::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEInteractOutLine::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 }
 
@@ -136,58 +136,20 @@ int32 UIS_BIEInteractOutLine::ChangeOutLineCount(int32 AddOutLineNum)
 	return OutLineCount;
 }
 
-void UIS_BIEInteractOutLine::ReplicatedUsing_OutLineInteractTraceTypeInfo()
+void UIS_BIEInteractOutLine::ReplicatedUsing_OutLineInteractTraceTypeTag()
 {
-	for (FIS_OutLineInteractTraceTypeInfo& Info : OutLineInteractTraceTypeInfo)
-	{
-		OutLineInteractTraceTypeInfoMap.Add(Info.InteractTraceType, Info.InteractVerifyInfo);
-	}
+
 }
 
-void UIS_BIEInteractOutLine::OutLineCheckIntervalBack()
+void UIS_BIEInteractOutLine::RefreshOutLineMeshComponnet()
 {
-	for (FIS_OutLineBeVerifyInfo& VerifyInfo : AllOutLineBeVerifyInfo)
+	OutLineMeshComponnets.Empty();
+	for (UActorComponent*& ActorCom : GetComponent())
 	{
-		if (VerifyInfo.InteractComponent)
+		UPrimitiveComponent* PrimitiveCom = Cast<UPrimitiveComponent>(ActorCom);
+		if (PrimitiveCom)
 		{
-			FText FailText;
-			if (OutLineInteractTraceTypeInfoMap[VerifyInfo.InteractTraceType].Verify(VerifyInfo.InteractComponent, BeInteractComponent, FailText))
-			{
-				if (!CurEnterInteractTraceType.Contains(VerifyInfo.InteractTraceType))
-				{
-					CurEnterInteractTraceType.Add(VerifyInfo.InteractTraceType);
-					ChangeOutLineCount(1);
-				}
-			}
-			else
-			{
-				if (CurEnterInteractTraceType.Contains(VerifyInfo.InteractTraceType))
-				{
-					CurEnterInteractTraceType.Remove(VerifyInfo.InteractTraceType);
-					ChangeOutLineCount(-1);
-				}
-			}
+			OutLineMeshComponnets.Add(PrimitiveCom);
 		}
-	}
-}
-
-void UIS_BIEInteractOutLine::OutLineBeVerifyInfoChange(bool IsAdd, FIS_OutLineBeVerifyInfo VerifyInfo)
-{
-	if (IsAdd)
-	{
-		AllOutLineBeVerifyInfo.Add(VerifyInfo);
-	}
-	else
-	{
-		AllOutLineBeVerifyInfo.Remove(VerifyInfo);
-	}
-
-	if (AllOutLineBeVerifyInfo.Num() > 0)
-	{
-		GetWorld()->GetTimerManager().SetTimer(OutLineCheckTimeHandle, this, &UIS_BIEInteractOutLine::OutLineCheckIntervalBack, OutLineCheckInterval, true);
-	}
-	else
-	{
-		GetWorld()->GetTimerManager().ClearTimer(OutLineCheckTimeHandle);
 	}
 }

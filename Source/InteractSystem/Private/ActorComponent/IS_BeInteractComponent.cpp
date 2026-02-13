@@ -89,7 +89,7 @@ void UIS_BeInteractComponent::BeginPlay()
 
 		UseBeInteractExtend.Append(AddBeInteractExtendHandles);
 
-		CreateBeInteractExtendFromHandle(UseBeInteractExtend);
+		AddBeInteractExtendFromHandle_Array(UseBeInteractExtend);
 	}
 
 	IIS_BeInteractInterface::Execute_SetInteractTime(this, BeInteractInfo.InteractTime);
@@ -100,8 +100,21 @@ void UIS_BeInteractComponent::BeginPlay()
 void UIS_BeInteractComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
+	for (TPair<FGameplayTag, FIS_InteractVerifyInfo>& pair : BeInteractInfo.InteractTypeVerifyInfo)
+	{
+		IIS_BeInteractInterface::Execute_InteractLeave(this, nullptr, pair.Key);//处理UI逻辑，UI依靠离开事件进行清除
+	}
 }
 
+void UIS_BeInteractComponent::BeginDestroy()
+{
+	Super::BeginDestroy();
+}
+
+void UIS_BeInteractComponent::DestroyComponent(bool bPromoteChildren)
+{
+	Super::DestroyComponent(bPromoteChildren);
+}
 
 // Called every frame
 void UIS_BeInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -109,6 +122,14 @@ void UIS_BeInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	// ...
+}
+
+void UIS_BeInteractComponent::ReplicatedUsing_AllExtend()
+{
+	//for (UIS_BeInteractExtendBase*& Extend : AllExtend)
+	//{
+	//	Server_SyncInit_RepCheck(Extend, Extend->NetType);
+	//}
 }
 
 FIS_BeInteractInfo UIS_BeInteractComponent::GetBeInteractInfo_Implementation()
@@ -121,9 +142,24 @@ FIS_BeInteractDynamicInfo UIS_BeInteractComponent::GetBeInteractDynamicInfo_Impl
 	return BeInteractDynamicInfo;
 }
 
+FIS_BeInteractUIInfo UIS_BeInteractComponent::GetInteractUIInfo_Implementation()
+{
+	if (CurInteractRoleSignInfo.InteractTypeTag.IsValid() && BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].bIsDisplayInteractUI && BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].bIsOverrideInteractUIInfo)
+	{
+		return BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].OverrideInteractUIInfo;
+	}
+	return BeInteractInfo.InteractUIInfo;
+}
+
+FIS_BeInteractUIInfo UIS_BeInteractComponent::SetInteractUIInfo_Implementation(FIS_BeInteractUIInfo UIInfo)
+{
+	BeInteractInfo.InteractUIInfo = UIInfo;
+	return BeInteractInfo.InteractUIInfo;
+}
+
 bool UIS_BeInteractComponent::IsDisplayInteractText_Implementation()
 {
-	if (!BeInteractInfo.InteractText.IsEmpty() && (BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bNotActiveIsDisplayInteractText))
+	if (!BeInteractInfo.InteractUIInfo.InteractText.IsEmpty() && (BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bNotActiveIsDisplayInteractText))
 	{
 		return true;
 	}
@@ -132,12 +168,12 @@ bool UIS_BeInteractComponent::IsDisplayInteractText_Implementation()
 
 FText UIS_BeInteractComponent::GetInteractText_Implementation()
 {
-	return BeInteractInfo.InteractText;
+	return BeInteractInfo.InteractUIInfo.InteractText;
 }
 
 void UIS_BeInteractComponent::SetInteractText_Implementation(const FText& InteractText)
 {
-	BeInteractInfo.InteractText = InteractText;
+	BeInteractInfo.InteractUIInfo.InteractText = InteractText;
 }
 
 EIS_InteractType UIS_BeInteractComponent::GetInteractType_Implementation()
@@ -249,13 +285,13 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 		{
 			if (BeInteractDynamicInfo.AllInteractComponent.Num() <= BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 			{
-				if (BeInteractInfo.InteractVerifyInfo.Verify(InteractComponent, this, FailText))//交互验证
-				{
+				//if (BeInteractInfo.InteractVerifyInfo.Verify(InteractComponent, this, FailText))//交互验证
+				//{
 					if (CanInteract_Extend(InteractComponent, OuterCompareInfo, FailText))//扩展类的额外判断
 					{
 						return BeInteractInfo.BeCompareInfo.CompareResult(OuterCompareInfo, FailText);
 					}
-				}
+				//}
 			}
 			else
 			{
@@ -325,7 +361,7 @@ bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_Int
 		return true;
 	}
 	//未通过开启Timer进行检测
-	GetWorld()->GetTimerManager().SetTimer(BeInteractOtherInfo.InteractRoleNumVerifyTimerHandle, this, &UIS_BeInteractComponent::InteractRoleNumVerifyBack,
+	GetWorld()->GetTimerManager().SetTimer(InteractRoleNumVerifyTimerHandle, this, &UIS_BeInteractComponent::InteractRoleNumVerifyBack,
 		BeInteractInfo.InteractCompleteVerifyInfo.VerifyInteractRoleNumTimeInterval,true);
 	return false;
 }
@@ -382,25 +418,30 @@ UUserWidget* UIS_BeInteractComponent::CreateVerifyObject_UI_Implementation(UIS_I
 	return UI;
 }
 
-void UIS_BeInteractComponent::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	InteractTraceCheck(TraceType);
+	InteractTraceTypeEnterOrLeave(TraceTypeTag);
 	BeInteractDynamicInfo.bIsInEnter = true;
+
+	CurInteractRoleSignInfo.InteractComponent = InteractComponent;
+	CurInteractRoleSignInfo.RoleSign = InteractComponent->GetRoleSign();
+	CurInteractRoleSignInfo.InteractTypeTag = TraceTypeTag;
+
 	switch (InteractEventNetType)
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractEnter.Broadcast(InteractComponent, TraceType);
+		OnInteractEnter.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractEnter(InteractComponent, TraceType);
+		NetClient_OnInteractEnter(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractEnter(InteractComponent, TraceType);
+		NetMulti_OnInteractEnter(InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -410,33 +451,33 @@ void UIS_BeInteractComponent::InteractEnter_Implementation(UIS_InteractComponent
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractEnter(BeInteractExtend, InteractComponent, TraceType);
+		IIS_BeInteractInterface::Execute_InteractEnter(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
-void UIS_BeInteractComponent::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	InteractTraceCheck(TraceType,false);
+	InteractTraceTypeEnterOrLeave(TraceTypeTag,false);
 	BeInteractDynamicInfo.bIsInEnter = false;
 	if (IIS_BeInteractInterface::Execute_InteractLeaveIsEnd(this) && BeInteractDynamicInfo.bIsInInteract)//在移出被交互物时，要不要停止交互
 	{
-		IIS_BeInteractInterface::Execute_InteractEnd(this, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractEnd(this, InteractComponent, TraceTypeTag);
 	}
 	switch (InteractEventNetType)
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractLeave.Broadcast(InteractComponent, TraceType);
+		OnInteractLeave.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_OnInteractLeave(InteractComponent, TraceType);
+		NetClient_OnInteractLeave(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_OnInteractLeave(InteractComponent, TraceType);
+		NetMulti_OnInteractLeave(InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -446,7 +487,7 @@ void UIS_BeInteractComponent::InteractLeave_Implementation(UIS_InteractComponent
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractLeave(BeInteractExtend, InteractComponent, TraceType);
+		IIS_BeInteractInterface::Execute_InteractLeave(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
@@ -455,11 +496,25 @@ bool UIS_BeInteractComponent::InteractLeaveIsEnd_Implementation()
 	return BeInteractInfo.bInteractLeaveIsEnd;
 }
 
-void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	EIS_BeInteractInterfaceType FunctionType = EIS_BeInteractInterfaceType::InteractStart;
 	BeInteractDynamicInfo.bIsInInteract = true;
 	BeInteractDynamicInfo.AllInteractComponent.Add(InteractComponent);
+
+	//部分签名信息
+	CurInteractRoleSignInfo.InteractComponent = InteractComponent;
+	CurInteractRoleSignInfo.RoleSign = InteractComponent->GetRoleSign();
+	CurInteractRoleSignInfo.InteractTypeTag = TraceTypeTag;
+	if (InteractComponent && InteractRoleSignInfo.Contains(InteractComponent->GetRoleSign()))
+	{
+		CurInteractRoleSignInfo.InteractCount = InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractCount;
+	}
+	else
+	{
+		CurInteractRoleSignInfo.InteractCount = 0;//如果是新的人交互时需要清空一下之前人的交互次数赋予给新的人
+	}
+	InteractRoleSignInfo.Add(InteractComponent->GetRoleSign(), CurInteractRoleSignInfo);//瞬间交互立刻就需要数据这里先添加一下 需要注意的是，此时交互Timer还没生效
 
 	if (BeInteractInfo.InteractNumSubtractType == EIS_InteractNumSubtractType::Start)
 	{
@@ -470,17 +525,17 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractStart.Broadcast(InteractComponent);
+		OnInteractStart.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(FunctionType, InteractComponent);
+		NetClient_CallBeInteractInterface(FunctionType, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent);
+		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -495,7 +550,6 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 		BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 1, 0.0f, 0);
 	}
 
-	FTimerHandle TimeHandle;
 	switch (BeInteractInfo.InteractType)
 	{
 	case EIS_InteractType::Instant://瞬间交互直接完成
@@ -508,19 +562,19 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 		//交互时长是否允许多人累加 || 交互时长本身是否允许累计
 		if (BeInteractInfo.bEveryoneCumulativeTime || BeInteractInfo.InteractCumulativeTimeType != EIS_InteractCumulativeTimeType::NotCumulative)
 		{
-			GetWorld()->GetTimerManager().SetTimer(TimeHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
+			GetWorld()->GetTimerManager().SetTimer(CurInteractRoleSignInfo.InteractTimerHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
 				BeInteractInfo.CumulativeTimeInterval, true);
 		}
 		else
 		{
 			if (BeInteractInfo.InteractTime.Num() > 1)//交互时长是否拥有多段
 			{
-				GetWorld()->GetTimerManager().SetTimer(TimeHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
+				GetWorld()->GetTimerManager().SetTimer(CurInteractRoleSignInfo.InteractTimerHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
 					BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount]);//从第一段开始交互
 			}
 			else
 			{
-				GetWorld()->GetTimerManager().SetTimer(TimeHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
+				GetWorld()->GetTimerManager().SetTimer(CurInteractRoleSignInfo.InteractTimerHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
 					BeInteractDynamicInfo.InteractTotalTime);
 			}
 		}
@@ -529,7 +583,8 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	default:
 		break;
 	}
-	BeInteractOtherInfo.InteractTimerHandle.Add(InteractComponent->GetRoleSign(), TimeHandle);
+
+	InteractRoleSignInfo.Add(InteractComponent->GetRoleSign(), CurInteractRoleSignInfo);//第二次添加 主要是为了赋值交互Timer
 
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
@@ -538,17 +593,17 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 		{
 		case EIS_InteractEventNetType::Server:
 		{
-			IIS_BeInteractInterface::Execute_InteractStart(BeInteractExtend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractStart(BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_InteractEventNetType::Client:
 		{
-			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_InteractEventNetType::NetMulticast:
 		{
-			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		default:
@@ -557,7 +612,7 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	}
 }
 
-void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	EIS_BeInteractInterfaceType FunctionType = EIS_BeInteractInterfaceType::InteractEnd;
 	//不同的人同时交互，A先完成了，扣除交互次数，此时B应该被打断或无法完成
@@ -571,11 +626,11 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	if (!BeInteractDynamicInfo.bIsComplete)
 	{
 		//没完成交互的话，判断还有其他人在交互吗
-		if (BeInteractOtherInfo.InteractTimerHandle.Contains(InteractComponent->GetRoleSign()))//我结束时有没有与被交互目标产生过TimerHandle
+		if (InteractRoleSignInfo.Contains(InteractComponent->GetRoleSign()))//我结束时有没有与被交互目标产生过TimerHandle
 		{
-			GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractTimerHandle[InteractComponent->GetRoleSign()]);
+			GetWorld()->GetTimerManager().ClearTimer(InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractTimerHandle);
 		}
-		BeInteractOtherInfo.InteractTimerHandle.Remove(InteractComponent->GetRoleSign());//移除结束交互者的TimerHandle
+		InteractRoleSignInfo.Remove(InteractComponent->GetRoleSign());//移除结束交互者的TimerHandle
 		
 		switch (BeInteractInfo.InteractCumulativeTimeType)//交互累计类型
 		{
@@ -635,23 +690,23 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 
 	BeInteractDynamicInfo.bIsComplete = false;
 	BeInteractDynamicInfo.bVerifyInteractRoleNumPass = false;
-	GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractRoleNumVerifyTimerHandle);//停止检测交互人数
+	GetWorld()->GetTimerManager().ClearTimer(InteractRoleNumVerifyTimerHandle);//停止检测交互人数
 
 	switch (InteractEventNetType)
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractEnd.Broadcast(InteractComponent);
+		OnInteractEnd.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(FunctionType, InteractComponent);
+		NetClient_CallBeInteractInterface(FunctionType, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent);
+		NetMulti_CallBeInteractInterface(FunctionType, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -665,17 +720,17 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 		{
 		case EIS_InteractEventNetType::Server:
 		{
-			IIS_BeInteractInterface::Execute_InteractEnd(BeInteractExtend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractEnd(BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_InteractEventNetType::Client:
 		{
-			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			NetClient_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_InteractEventNetType::NetMulticast:
 		{
-			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent);
+			NetMulti_CallBeInteractInterface_Extend(FunctionType, BeInteractExtend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		default:
@@ -684,26 +739,30 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	}
 }
 
-void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	//不同的人同时交互，A先完成了，扣除交互次数，此时B应该被打断或无法完成
 	if (InteractComponent)
 	{
 		BeInteractDynamicInfo.ClearInteractTimeFromRoleSign(InteractComponent->GetRoleSign());//交互完成需要清除历史记录中该交互者的交互时间
 		BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
+
+		InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractCount++;
 	}
 
 	BeInteractDynamicInfo.bIsComplete = true;
 	BeInteractDynamicInfo.bIsVerifying = false;
 	BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;//清除统一累计时长
 	BeInteractDynamicInfo.InteractCompleteCount = 0;//清除多段交互完成次数
-	GetWorld()->GetTimerManager().ClearTimer(BeInteractOtherInfo.InteractRoleNumVerifyTimerHandle);//停止检测交互人数
+	GetWorld()->GetTimerManager().ClearTimer(InteractRoleNumVerifyTimerHandle);//停止检测交互人数
 	//停掉全部Timer
-	for (TPair<FName, FTimerHandle>& pair : BeInteractOtherInfo.InteractTimerHandle)
+	for (TPair<FName, FIS_InteractRoleSignInfo>& pair : InteractRoleSignInfo)
 	{
-		GetWorld()->GetTimerManager().ClearTimer(pair.Value);
+		GetWorld()->GetTimerManager().ClearTimer(pair.Value.InteractTimerHandle);
+		pair.Value.InteractComponent = nullptr;
+		pair.Value.InteractTypeTag = FGameplayTag();
 	}
-	BeInteractOtherInfo.InteractTimerHandle.Empty();
+	//InteractRoleSignInfo.Empty();
 	BeInteractDynamicInfo.AllInteractComponent.Empty();//清除当前跟我交互的全部组件
 	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Empty();
 
@@ -726,17 +785,17 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractComplete.Broadcast(InteractComponent);
+		OnInteractComplete.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -745,40 +804,40 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 
 	if (BeInteractInfo.bGenerateAttachEvents)//如果需要生成挂载交互事件，在交互完成时才算开始
 	{
-		IIS_BeInteractInterface::Execute_InteractAttachTo(this, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractAttachTo(this, InteractComponent, TraceTypeTag);
 	}
 	else 
 	{
 		if (InteractComponent)
 		{
-			InteractComponent->EndCurInteract();//完成时使交互组件结束交互
+			InteractComponent->EndCurInteract(TraceTypeTag);//完成时使交互组件结束交互
 		}
 	}
 
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractComplete(BeInteractExtend, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractComplete(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
-void UIS_BeInteractComponent::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	switch (InteractEventNetType)
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+		OnInteractComplete_MultiSegment.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractComplete_MultiSegment, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -788,11 +847,11 @@ void UIS_BeInteractComponent::InteractComplete_MultiSegment_Implementation(UIS_I
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(BeInteractExtend, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
-void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	BeInteractDynamicInfo.bIsInAttach = true;
 
@@ -800,17 +859,17 @@ void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractCompon
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractAttachTo.Broadcast(InteractComponent);
+		OnInteractAttachTo.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachTo, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -820,11 +879,11 @@ void UIS_BeInteractComponent::InteractAttachTo_Implementation(UIS_InteractCompon
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractAttachTo(BeInteractExtend, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractAttachTo(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
-void UIS_BeInteractComponent::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	BeInteractDynamicInfo.bIsInAttach = false;
 
@@ -832,29 +891,29 @@ void UIS_BeInteractComponent::InteractAttachDetach_Implementation(UIS_InteractCo
 	{
 	case EIS_InteractEventNetType::Server:
 	{
-		OnInteractAttachDetach.Broadcast(InteractComponent);
+		OnInteractAttachDetach.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::Client:
 	{
-		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent);
+		NetClient_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_InteractEventNetType::NetMulticast:
 	{
-		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent);
+		NetMulti_CallBeInteractInterface(EIS_BeInteractInterfaceType::InteractAttachDetach, InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
 		break;
 	}
 
-	InteractComponent->EndCurInteract();//分离时使交互组件结束交互
+	InteractComponent->EndCurInteract(TraceTypeTag);//分离时使交互组件结束交互
 
 	//调用扩展对象的同名函数
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		IIS_BeInteractInterface::Execute_InteractAttachDetach(BeInteractExtend, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractAttachDetach(BeInteractExtend, InteractComponent, TraceTypeTag);
 	}
 }
 
@@ -868,58 +927,58 @@ void UIS_BeInteractComponent::NetClient_OnInteractVerify_Implementation(UIS_Inte
 	OnInteractVerify.Broadcast(InteractComponent, VerifyObject);
 }
 
-void UIS_BeInteractComponent::NetClient_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::NetClient_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	OnInteractEnter.Broadcast(InteractComponent, TraceType);
+	OnInteractEnter.Broadcast(InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::NetMulti_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::NetMulti_OnInteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	OnInteractEnter.Broadcast(InteractComponent, TraceType);
+	OnInteractEnter.Broadcast(InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::NetClient_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::NetClient_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	OnInteractLeave.Broadcast(InteractComponent, TraceType);
+	OnInteractLeave.Broadcast(InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::NetMulti_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType)
+void UIS_BeInteractComponent::NetMulti_OnInteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	OnInteractLeave.Broadcast(InteractComponent, TraceType);
+	OnInteractLeave.Broadcast(InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::CallBeInteractInterface(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	switch (InterfaceType)
 	{
 	case EIS_BeInteractInterfaceType::InteractStart:
 	{
-		OnInteractStart.Broadcast(InteractComponent);
+		OnInteractStart.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_BeInteractInterfaceType::InteractEnd:
 	{
-		OnInteractEnd.Broadcast(InteractComponent);
+		OnInteractEnd.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_BeInteractInterfaceType::InteractComplete:
 	{
-		OnInteractComplete.Broadcast(InteractComponent);
+		OnInteractComplete.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_BeInteractInterfaceType::InteractComplete_MultiSegment:
 	{
-		OnInteractComplete_MultiSegment.Broadcast(InteractComponent);
+		OnInteractComplete_MultiSegment.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_BeInteractInterfaceType::InteractAttachTo:
 	{
-		OnInteractAttachTo.Broadcast(InteractComponent);
+		OnInteractAttachTo.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	case EIS_BeInteractInterfaceType::InteractAttachDetach:
 	{
-		OnInteractAttachDetach.Broadcast(InteractComponent);
+		OnInteractAttachDetach.Broadcast(InteractComponent, TraceTypeTag);
 		break;
 	}
 	default:
@@ -927,17 +986,17 @@ void UIS_BeInteractComponent::CallBeInteractInterface(EIS_BeInteractInterfaceTyp
 	}
 }
 
-void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	CallBeInteractInterface(InterfaceType, InteractComponent);
+	CallBeInteractInterface(InterfaceType, InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	CallBeInteractInterface(InterfaceType, InteractComponent);
+	CallBeInteractInterface(InterfaceType, InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	if (Extend)
 	{
@@ -945,32 +1004,32 @@ void UIS_BeInteractComponent::CallBeInteractInterface_Extend(EIS_BeInteractInter
 		{
 		case EIS_BeInteractInterfaceType::InteractStart:
 		{
-			IIS_BeInteractInterface::Execute_InteractStart(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractStart(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_BeInteractInterfaceType::InteractEnd:
 		{
-			IIS_BeInteractInterface::Execute_InteractEnd(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractEnd(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_BeInteractInterfaceType::InteractComplete:
 		{
-			IIS_BeInteractInterface::Execute_InteractComplete(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractComplete(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_BeInteractInterfaceType::InteractComplete_MultiSegment:
 		{
-			IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_BeInteractInterfaceType::InteractAttachTo:
 		{
-			IIS_BeInteractInterface::Execute_InteractAttachTo(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractAttachTo(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		case EIS_BeInteractInterfaceType::InteractAttachDetach:
 		{
-			IIS_BeInteractInterface::Execute_InteractAttachDetach(Extend, InteractComponent);
+			IIS_BeInteractInterface::Execute_InteractAttachDetach(Extend, InteractComponent, TraceTypeTag);
 			break;
 		}
 		default:
@@ -979,14 +1038,14 @@ void UIS_BeInteractComponent::CallBeInteractInterface_Extend(EIS_BeInteractInter
 	}
 }
 
-void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent);
+	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent, TraceTypeTag);
 }
 
-void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent)
+void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
-	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent);
+	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent, TraceTypeTag);
 }
 
 UAnimMontage* UIS_BeInteractComponent::GetMontageFromKeyName(FName KeyName)
@@ -1016,26 +1075,18 @@ float UIS_BeInteractComponent::GetInteractMontageSectionLengthFromName(UAnimMont
 	return -1.0f;
 }
 
-void UIS_BeInteractComponent::InteractTraceCheck_Implementation(EIS_InteractTraceType TraceType, bool IsEnter)
+void UIS_BeInteractComponent::InteractTraceTypeEnterOrLeave_Implementation(FGameplayTag TraceTypeTag, bool IsEnter)
 {
 	if (IsEnter)
 	{
-		if (!BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))
+		if (!BeInteractDynamicInfo.AllEnterTraceTypeTag.Contains(TraceTypeTag))
 		{
-			BeInteractDynamicInfo.AllEnterTraceType.Add(TraceType);
+			BeInteractDynamicInfo.AllEnterTraceTypeTag.Add(TraceTypeTag);
 		}
 	}
 	else
 	{
-		//在离开时若传递进来的检测类型为None表示全部清楚，这样做是为了在清空时避免重复调用该函数对多个类型进行删除
-		if (TraceType == EIS_InteractTraceType::None)
-		{
-			BeInteractDynamicInfo.AllEnterTraceType.Empty();
-		}
-		else
-		{
-			BeInteractDynamicInfo.AllEnterTraceType.Remove(TraceType);
-		}
+		BeInteractDynamicInfo.AllEnterTraceTypeTag.Remove(TraceTypeTag);
 	}
 }
 
@@ -1053,12 +1104,12 @@ float UIS_BeInteractComponent::GetCurInteractTimeFromRoleSign(FName RoleSign)
 	return BeInteractDynamicInfo.GetInteractTimeFromRoleSign(RoleSign);
 }
 
-bool UIS_BeInteractComponent::TryInteractComplete(UIS_InteractComponent* InteractComponent)
+bool UIS_BeInteractComponent::TryInteractComplete(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Add(InteractComponent);
 	if (IIS_BeInteractInterface::Execute_InteractCompleteVerifyCheck(this, InteractComponent))//交互验证
 	{
-		IIS_BeInteractInterface::Execute_InteractComplete(this, InteractComponent);
+		IIS_BeInteractInterface::Execute_InteractComplete(this, InteractComponent, TraceTypeTag);
 		return true;
 	}
 	return false;
@@ -1082,12 +1133,12 @@ float UIS_BeInteractComponent::GetAngleFromTargetDir(FVector TargetDir)
 void UIS_BeInteractComponent::InteractTimerBack()
 {
 	UIS_InteractComponent* InteractComponent;
+	FIS_InteractRoleSignInfo RoleSignInfo;
 	switch (BeInteractInfo.InteractType)
 	{
 	case EIS_InteractType::Instant://瞬间交互直接完成
 	{
-		InteractComponent = BeInteractDynamicInfo.AllInteractComponent.Last();
-		TryInteractComplete(InteractComponent);
+		TryInteractComplete(CurInteractRoleSignInfo.InteractComponent, CurInteractRoleSignInfo.InteractTypeTag);
 		break;
 	}
 	case EIS_InteractType::HasDuration://持续交互
@@ -1101,13 +1152,12 @@ void UIS_BeInteractComponent::InteractTimerBack()
 				//是多段判断这次交互有没有超过某段时长
 				if (BeInteractDynamicInfo.InteractCumulativeTime >= BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount])
 				{
-					//BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;多段累计不归零，在Beginplay时会特殊处理
-					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval);
+					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval, RoleSignInfo);
 					BeInteractDynamicInfo.InteractCompleteCount++;//增加累计成功次数
-					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent, RoleSignInfo.InteractTypeTag);
 					if (BeInteractDynamicInfo.InteractCompleteCount >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 					{
-						TryInteractComplete(InteractComponent);
+						TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 					}
 					//没有完成timer仍在不断调用（loop）中，会继续累计交互时长
 				}
@@ -1117,8 +1167,8 @@ void UIS_BeInteractComponent::InteractTimerBack()
 				//不是多段直接判断这次累计有没有超过总时长BeInteractDynamicInfo.InteractTotalTime
 				if (BeInteractDynamicInfo.InteractCumulativeTime >= BeInteractDynamicInfo.InteractTotalTime)
 				{
-					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval);
-					TryInteractComplete(InteractComponent);
+					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval, RoleSignInfo);
+					TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 				}
 			}
 		}
@@ -1129,35 +1179,35 @@ void UIS_BeInteractComponent::InteractTimerBack()
 				if (BeInteractInfo.InteractCumulativeTimeType == EIS_InteractCumulativeTimeType::NotCumulative)//不累计,多段交互
 				{
 					//不累计的多段交互是一段一段的timer，每个timer的时长是对应下标的值
-					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount]);
+					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount], RoleSignInfo);
 					BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(),0,0.0f,1);//增加该交互者的累计成功次数
-					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+					IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent, RoleSignInfo.InteractTypeTag);
 					if (BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign()) >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 					{
-						TryInteractComplete(InteractComponent);
+						TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 					}
 					else
 					{
 						FTimerHandle TimeHandle;
 						GetWorld()->GetTimerManager().SetTimer(TimeHandle, this, &UIS_BeInteractComponent::InteractTimerBack,
 							BeInteractInfo.InteractTime[BeInteractDynamicInfo.InteractCompleteCount]);
-						BeInteractOtherInfo.InteractTimerHandle.Add(InteractComponent->GetRoleSign(), TimeHandle);
+						//BeInteractOtherInfo.InteractTimerHandle.Add(InteractComponent->GetRoleSign(), TimeHandle);
 					}
 				}
 				else//累计时长,多段交互
 				{
 					//累计时的time是循环调用的
-					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval);
+					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval, RoleSignInfo);
 					//给对应的交互者增加交互时长
 					BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 0, BeInteractInfo.CumulativeTimeInterval, 0);
 					if (BeInteractDynamicInfo.GetInteractTimeFromRoleSign(InteractComponent->GetRoleSign()) >= 
 					BeInteractInfo.InteractTime[BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign())])
 					{
 						BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 0, 0.0f, 1);//增加该交互者的累计成功次数
-						IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent);
+						IIS_BeInteractInterface::Execute_InteractComplete_MultiSegment(this, InteractComponent, RoleSignInfo.InteractTypeTag);
 						if (BeInteractDynamicInfo.GetInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign()) >= BeInteractInfo.InteractTime.Num())//是否全部完成了
 						{
-							TryInteractComplete(InteractComponent);
+							TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 						}
 					}
 				}
@@ -1167,19 +1217,19 @@ void UIS_BeInteractComponent::InteractTimerBack()
 				if (BeInteractInfo.InteractCumulativeTimeType == EIS_InteractCumulativeTimeType::NotCumulative)//不累计,非多段交互
 				{
 					//不累计,非多段交互模式下的time调用时长 = 交互时长 且是非循环调用的
-					InteractComponent = FindCompleteInteractComponent(BeInteractDynamicInfo.InteractTotalTime);
-					TryInteractComplete(InteractComponent);
+					InteractComponent = FindCompleteInteractComponent(BeInteractDynamicInfo.InteractTotalTime, RoleSignInfo);
+					TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 				}
 				else//累计时长,非多段交互 按间隔累计和按分段累计在这里没有区别，区别是交互结束时对累计时长的处理
 				{
 					//累计时的time是循环调用的
-					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval);
+					InteractComponent = FindCompleteInteractComponent(BeInteractInfo.CumulativeTimeInterval, RoleSignInfo);
 					//给对应的交互者增加交互时长
 					BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 0, BeInteractInfo.CumulativeTimeInterval, 0);
 					//判断这个交互者有没有达到交互时长的需求
 					if (BeInteractDynamicInfo.GetInteractTimeFromRoleSign(InteractComponent->GetRoleSign()) >= BeInteractDynamicInfo.InteractTotalTime)
 					{
-						TryInteractComplete(InteractComponent);
+						TryInteractComplete(InteractComponent, RoleSignInfo.InteractTypeTag);
 					}
 				}
 			}
@@ -1195,7 +1245,7 @@ void UIS_BeInteractComponent::InteractRoleNumVerifyBack()
 {
 	if (BeInteractDynamicInfo.bVerifyInteractRoleNumPass)//如果外部还没完成交互，但此时人数已经通过由该函数触发完成
 	{
-		IIS_BeInteractInterface::Execute_InteractComplete(this, BeInteractDynamicInfo.AllInteractComponent.Last());//理应是因为最后一个人的交互导致的人数满足
+		IIS_BeInteractInterface::Execute_InteractComplete(this, BeInteractDynamicInfo.AllInteractComponent.Last(), CurInteractRoleSignInfo.InteractTypeTag);//理应是因为最后一个人的交互导致的人数满足
 	}
 
 	if (BeInteractDynamicInfo.bIsInInteract)//在交互中才需要判断
@@ -1218,17 +1268,18 @@ void UIS_BeInteractComponent::InteractRoleNumVerifyBack()
 	}
 }
 
-UIS_InteractComponent* UIS_BeInteractComponent::FindCompleteInteractComponent(float BackTime)
+UIS_InteractComponent* UIS_BeInteractComponent::FindCompleteInteractComponent(float BackTime, FIS_InteractRoleSignInfo& RoleSignInfo)
 {
-	for (TPair<FName, FTimerHandle>& pair : BeInteractOtherInfo.InteractTimerHandle)//哪个Handle完成了
+	for (TPair<FName, FIS_InteractRoleSignInfo>& pair : InteractRoleSignInfo)//哪个Handle完成了
 	{
-		float TimerHandleTime = UKismetSystemLibrary::K2_GetTimerElapsedTimeHandle(this, pair.Value);
+		float TimerHandleTime = UKismetSystemLibrary::K2_GetTimerElapsedTimeHandle(this, pair.Value.InteractTimerHandle);//获取计时器已用时间
 		if (TimerHandleTime >= BackTime || TimerHandleTime <= 0.0f)//<0表示已经结束了
 		{
 			for (UIS_InteractComponent*& Com : BeInteractDynamicInfo.AllInteractComponent)//这个Handle属于哪个交互组件
 			{
 				if (Com->GetRoleSign() == pair.Key)
 				{
+					RoleSignInfo = pair.Value;
 					return Com;
 				}
 			}
@@ -1237,17 +1288,17 @@ UIS_InteractComponent* UIS_BeInteractComponent::FindCompleteInteractComponent(fl
 	return nullptr;
 }
 
-bool UIS_BeInteractComponent::TraceTypeCheck(EIS_InteractTraceType TraceType, bool IsEnter)
+bool UIS_BeInteractComponent::TraceTypeCheck(FGameplayTag TraceTypeTag, bool IsEnter)
 {
 	//允许该类型的检测
-	if (BeInteractInfo.InteractCheckEnterCondition.Contains(TraceType))
+	if (BeInteractInfo.InteractTypeVerifyInfo.Contains(TraceTypeTag))
 	{
 		//如果是进入 && 该类型没有触发过“进入”事件
-		if (IsEnter && !BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))
+		if (IsEnter && !BeInteractDynamicInfo.AllEnterTraceTypeTag.Contains(TraceTypeTag))
 		{
 			return true;
 		}
-		else if(!IsEnter && BeInteractDynamicInfo.AllEnterTraceType.Contains(TraceType))//如果是离开，该类型必须先触发过“进入”事件
+		else if(!IsEnter && BeInteractDynamicInfo.AllEnterTraceTypeTag.Contains(TraceTypeTag))//如果是离开，该类型必须先触发过“进入”事件
 		{
 			return true;
 		}
@@ -1268,20 +1319,48 @@ bool UIS_BeInteractComponent::CanInteract_Extend(UIS_InteractComponent* Interact
 	return true;
 }
 
-void UIS_BeInteractComponent::CreateBeInteractExtendFromHandle(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle)
+void UIS_BeInteractComponent::AddBeInteractExtendFromHandle_Array(TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle)
 {
 	for (FIS_BeInteractExtendHandle& Handle : BeInteractExtendHandle)
 	{
-		FIS_BeInteractExtend BeInteractExtendInfo;
-		UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(Handle, BeInteractExtendInfo);
-		if (BeInteractExtendInfo.BeInteractExtendClass)
+		AddBeInteractExtendFromHandle(Handle);
+	}
+}
+
+void UIS_BeInteractComponent::AddBeInteractExtendFromHandle(FIS_BeInteractExtendHandle BeInteractExtendHandle)
+{
+	FIS_BeInteractExtend BeInteractExtendInfo;
+	UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(BeInteractExtendHandle, BeInteractExtendInfo);
+	if (BeInteractExtendInfo.BeInteractExtendClass)
+	{
+		UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
+		if (BeInteractExtend)
 		{
-			UIS_BeInteractExtendBase* BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(this, BeInteractExtendInfo.BeInteractExtendClass);
-			if (BeInteractExtend)
-			{
-				BeInteractExtend->Init(this, BeInteractExtendInfo.BeInteractExtend);
-				AllExtend.Add(BeInteractExtend);
-			}
+			BeInteractExtend->ExtendHandle = BeInteractExtendHandle;
+			AddBeInteractExtend(BeInteractExtend);
 		}
 	}
+}
+
+void UIS_BeInteractComponent::AddBeInteractExtend(UIS_BeInteractExtendBase* BeInteractExtend)
+{
+	if (BeInteractExtend)
+	{
+		FIS_BeInteractExtend BeInteractExtendInfo;
+		UIS_BlueprintFunctionLibrary::GetBeInteractExtendFromHandle(BeInteractExtend->ExtendHandle, BeInteractExtendInfo);
+		BeInteractExtend->Init_RepCheck(this, BeInteractExtendInfo.BeInteractExtend);
+		AllExtend.Add(BeInteractExtend);
+	}
+}
+
+UIS_BeInteractExtendBase* UIS_BeInteractComponent::GetExtendFromClass(TSubclassOf<UIS_BeInteractExtendBase> ExtendClass)
+{
+	for (UIS_BeInteractExtendBase*& OneExtend : AllExtend)
+	{
+		if (OneExtend->IsA(ExtendClass))
+		{
+			return OneExtend;
+		}
+	}
+	return nullptr;
 }

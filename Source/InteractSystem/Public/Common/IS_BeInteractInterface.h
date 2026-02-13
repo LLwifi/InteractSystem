@@ -60,6 +60,7 @@ class INTERACTSYSTEM_API IIS_BeInteractInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
+
 	//获取被交互的信息
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	FIS_BeInteractInfo GetBeInteractInfo();
@@ -69,6 +70,20 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo();
 	virtual FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo_Implementation() { return FIS_BeInteractDynamicInfo(); };
+
+	/*
+	* 获取用户界面信息
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	FIS_BeInteractUIInfo GetInteractUIInfo();
+	virtual FIS_BeInteractUIInfo GetInteractUIInfo_Implementation() { return FIS_BeInteractUIInfo(); };
+
+	/*
+	* 设置用户界面信息
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	FIS_BeInteractUIInfo SetInteractUIInfo(FIS_BeInteractUIInfo UIInfo);
+	virtual FIS_BeInteractUIInfo SetInteractUIInfo_Implementation(FIS_BeInteractUIInfo UIInfo) { return FIS_BeInteractUIInfo(); };
 
 	/*
 	* 当前是否可以显示交互文本
@@ -225,8 +240,8 @@ public:
 	* TopPriority：我被触发移入时，“我”是不是交互优先级最高的对象
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractEnter(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
-	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) {};
+	void InteractEnter(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 移出可交互目标——仅在客户端触发
@@ -234,8 +249,8 @@ public:
 	* TraceType：离开时是因为被哪个类型触发的
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractLeave(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType);
-	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, EIS_InteractTraceType TraceType) {};
+	void InteractLeave(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 在移出被交互物时，要不要停止交互
@@ -249,46 +264,46 @@ public:
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractStart(UIS_InteractComponent* InteractComponent);
-	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractStart(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 结束交互
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractEnd(UIS_InteractComponent* InteractComponent);
-	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractEnd(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 完成交互——所有的交互条件和验证均通过时，该函数会被调用
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractComplete(UIS_InteractComponent* InteractComponent);
-	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractComplete(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractComplete_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 多段完成交互——当交互时长的数组长度 > 1时，在交互过程中达到某个时长后该函数会被调用
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent);
-	virtual void InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractComplete_MultiSegment(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractComplete_MultiSegment_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 交互挂载——交互类型为AttachTo（挂载交互）时，完成交互的时候会调用该接口表示交互进入
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractAttachTo(UIS_InteractComponent* InteractComponent);
-	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractAttachTo(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractAttachTo_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 
 	/*
 	* 分离挂载交互——交互类型为AttachTo（挂载交互）时，需要主动调用该接口表示交互退出
 	* InteractComponent：哪个交互组件向我发起交互请求
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractAttachDetach(UIS_InteractComponent* InteractComponent);
-	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent) {};
+	void InteractAttachDetach(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractAttachDetach_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) {};
 };

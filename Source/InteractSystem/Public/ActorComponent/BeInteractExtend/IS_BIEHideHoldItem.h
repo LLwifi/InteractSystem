@@ -18,8 +18,8 @@ public:
 
 	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data) override;
 
-	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent) override;
+	virtual void InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
+	virtual void InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 
 
 public:

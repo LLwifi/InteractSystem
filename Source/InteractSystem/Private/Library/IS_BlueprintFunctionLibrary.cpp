@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Library/IS_BlueprintFunctionLibrary.h"
@@ -7,7 +7,7 @@
 float UIS_BlueprintFunctionLibrary::GetAngleFromMyForwardAndTargetDir(FVector MyForward, FVector TargetDir)
 {
 	float BaseAngle = UKismetMathLibrary::DegAcos(UKismetMathLibrary::Vector_CosineAngle2D(TargetDir, MyForward));
-	FVector Cross = UKismetMathLibrary::Cross_VectorVector(TargetDir, MyForward);//ÅÐ¶ÏÊÇ·ñÔ½¹ýÁË180¶È
+	FVector Cross = UKismetMathLibrary::Cross_VectorVector(TargetDir, MyForward);//åˆ¤æ–­æ˜¯å¦è¶Šè¿‡äº†180åº¦
 
 	if (Cross.Z > 0.0f)
 	{

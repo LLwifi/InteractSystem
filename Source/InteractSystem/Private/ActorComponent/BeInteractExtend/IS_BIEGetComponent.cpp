@@ -4,6 +4,17 @@
 #include "ActorComponent/BeInteractExtend/IS_BIEGetComponent.h"
 #include "ActorComponent/IS_BeInteractComponent.h"
 
+void UIS_BIEGetComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UIS_BIEGetComponent, GetComponentNum);
+	DOREPLIFETIME(UIS_BIEGetComponent, ComponentClass);
+	DOREPLIFETIME(UIS_BIEGetComponent, Interface);
+	DOREPLIFETIME(UIS_BIEGetComponent, Tag);
+	DOREPLIFETIME(UIS_BIEGetComponent, SocketName);
+}
+
 void UIS_BIEGetComponent::Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data)
 {
 	Super::Init_Implementation(BeInteractCom, Data);

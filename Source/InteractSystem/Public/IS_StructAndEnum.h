@@ -115,6 +115,32 @@ public:
 	TSoftClassPtr<UObject> CompleteVerifyClass;
 };
 
+/*可被交互物的UI所需信息
+*/
+USTRUCT(BlueprintType)
+struct FIS_BeInteractUIInfo
+{
+	GENERATED_BODY()
+public:
+
+public:
+	//交互UI类
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSoftClassPtr<UUserWidget> InteractTipPanelClass = UIS_Config::GetInstance()->DefaultInteractTipPanelClass;
+	//交互UI显示文本
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FText InteractText;
+	//文本颜色
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor InteractTextColor = FLinearColor::White;
+	//交互纹理
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSoftObjectPtr<UTexture2D> InteractTexture2D;
+	//纹理颜色
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor InteractTexture2DColor = FLinearColor::White;
+};
+
 /*交互验证信息
 * 专属于交互验证的配置
 */
@@ -135,6 +161,12 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsDisplayInteractUI = true;
+	//是否重载用户界面信息
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
+	bool bIsOverrideInteractUIInfo = false;
+	//用户界面重载信息
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bIsOverrideInteractUIInfo"))
+	FIS_BeInteractUIInfo OverrideInteractUIInfo;
 	//检测类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_BeInteractCheckType InteractCheckType = EIS_BeInteractCheckType::AnyTrigger;
@@ -145,7 +177,13 @@ public:
 
 	//通过比对（Compare）的才会被检测
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bIsCompareTraceCheck = false;
+	bool bIsCompareTraceCheck = true;
+
+	//通过比对（Compare）的才会被检测
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
+	bool bOverride_BeCompareInfoVerify = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverride_BeCompareInfoVerify"))
+	FCC_BeCompareInfo BeCompareInfo;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
 	bool bOverride_InteractDistanceVerify = false;
@@ -241,6 +279,9 @@ struct FIS_BeInteractExtendHandle
 {
 	GENERATED_BODY()
 public:
+	FIS_BeInteractExtendHandle(){}
+	FIS_BeInteractExtendHandle(FName HandleRowName){ RowName = HandleRowName; }
+public:
 	//RowName
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FName RowName;
@@ -263,6 +304,9 @@ public:
 	virtual void OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName) override;
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FName RowName;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSubclassOf<UIS_BeInteractExtendBase> BeInteractExtendClass;
 
@@ -355,22 +399,19 @@ struct FIS_BeInteractInfo : public FTableRowBase
 {
 	GENERATED_BODY()
 public:
-	virtual void OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName) override
-	{
-		FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
-	}
+	virtual void OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName) override;
+	//{
+	//	FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
+	//}
 public:
 	//在网络下交互响应的端
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractEventNetType NetType = EIS_InteractEventNetType::Server;
 
-	//交互UI显示文本
+	//用户界面信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FText InteractText;
+	FIS_BeInteractUIInfo InteractUIInfo;
 
-	//交互提示UI类
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TSoftClassPtr<UUserWidget> InteractTipPanelClass = UIS_Config::GetInstance()->DefaultInteractTipPanelClass;
 	//交互方式类型
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_InteractType InteractType = EIS_InteractType::Instant;
@@ -403,10 +444,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TMap<FName, TSoftObjectPtr<USoundBase>> InteractSound = UIS_Config::GetInstance()->DefaultBeInteractSound;
 
-	/*交互验证信息
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FIS_InteractVerifyInfo InteractVerifyInfo;
 	/*对于不同类型下的交互验证信息
 	* 不添加表示该类型不会触发
 	* 该Map为空时进入/检测事件不会触发
@@ -490,17 +527,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FCC_BeCompareInfo BeCompareInfo;
 
-	/*相机射线能被触发进入的类型
-	* 不添加表示该类型不会触发
-	* 该Map为空时进入/检测事件不会触发
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TMap<EIS_InteractTraceType, FIS_BeInteractCheckCondition> InteractCheckEnterCondition;
-
 	/*可被交互物的扩展功能
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle;
+
+//public:
+//	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+//	TSubclassOf<UIS_BeInteractExtendBase> BeInteractExtendClass;
+//
+//	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditinLine))
+//	UIS_BeInteractExtendBase* BeInteractExtend = nullptr;
 };
 
 /*被交互的动态信息
@@ -650,7 +687,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_HistoryBeInteractInfo> HistoryBeInteracterInfo;
 
-	//运行中的交互次数
+	//运行中的剩余交互次数
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 InteractNum = 0;
 
@@ -691,8 +728,8 @@ public:
 	float InteractCumulativeTime = 0.0f;
 
 	/*Trace的进入离开管理
-	* 当前进入的全部检测类型
+	* 当前进入的全部检测类型Tag
 	*/
 	UPROPERTY(BlueprintReadWrite)
-	TArray<EIS_InteractTraceType> AllEnterTraceType;
+	TArray<FGameplayTag> AllEnterTraceTypeTag;
 };

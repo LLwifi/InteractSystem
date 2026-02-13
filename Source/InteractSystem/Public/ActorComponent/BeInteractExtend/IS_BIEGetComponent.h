@@ -16,7 +16,8 @@ class INTERACTSYSTEM_API UIS_BIEGetComponent : public UIS_BeInteractExtendBase
 	GENERATED_BODY()
 
 public:
-	
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
+
 	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data) override;
 
 	//当前的组件数量是否足够
@@ -44,27 +45,27 @@ public:
 	* 需要注意的是：获取的顺序是先根据ComponentClass获取，再根据Interface获取
 	* 如果GetComponentNum = 1 而ComponentClass和Interface同时配置了，会先在ComponentClass里面拿去符合条件的组件
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	int32 GetComponentNum = 0;
 
 	//获取给定类型的组件
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	TArray<TSubclassOf<UActorComponent>> ComponentClass;
 	//获取给定接口的组件
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	TArray<TSubclassOf<UInterface>> Interface;
 
 	/*获取给定Tag的组件
 	* 额外判定项，在使用Interface或ComponentClass获取到组件后再判断是否拥有该Tag
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	TArray<FName> Tag;
 
 	/*获取给定插槽名称的组件
 	* 额外判定项，在使用Interface或ComponentClass获取到组件后再判断插槽名称是否为该值（有任意一个即可）
 	* 需要注意的是只有SceneComponent组件才有Scoket
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
 	TArray<FName> SocketName;
 
 	UPROPERTY(BlueprintReadWrite)

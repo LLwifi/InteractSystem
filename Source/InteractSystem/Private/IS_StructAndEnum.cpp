@@ -91,6 +91,7 @@ bool FIS_InteractVerifyInfo::InteractorsAngleVerifyCheck(UActorComponent* Intera
 void FIS_BeInteractExtend::OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName)
 {
 	FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
+	RowName = InRowName;
 	if (BeInteractExtendClass)
 	{
 		if (!BeInteractExtend || BeInteractExtend->GetClass() != BeInteractExtendClass)
@@ -102,4 +103,21 @@ void FIS_BeInteractExtend::OnDataTableChanged(const UDataTable* InDataTable, con
 	{
 		BeInteractExtend = nullptr;
 	}
+}
+
+void FIS_BeInteractInfo::OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName)
+{
+	FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
+
+	//if (BeInteractExtendClass)
+	//{
+	//	if (!BeInteractExtend || BeInteractExtend->GetClass() != BeInteractExtendClass)
+	//	{
+	//		BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(const_cast<UDataTable*>(InDataTable), BeInteractExtendClass);
+	//	}
+	//}
+	//else
+	//{
+	//	BeInteractExtend = nullptr;
+	//}
 }

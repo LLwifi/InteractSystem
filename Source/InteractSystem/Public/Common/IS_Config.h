@@ -9,15 +9,6 @@
 #include "Common/IS_GameplayTag.h"
 #include "IS_Config.generated.h"
 
-//交互检测的类型
-UENUM(BlueprintType)
-enum class EIS_InteractTraceType :uint8
-{
-	None = 0 UMETA(DisplayName = "空"),
-	CameraTrace UMETA(DisplayName = "摄像机射线检测"),
-	SphereTrace UMETA(DisplayName = "球形检测")
-};
-
 //UE的检测类型
 UENUM(BlueprintType)
 enum class EIS_TraceType :uint8
@@ -52,18 +43,18 @@ enum class EIS_BeTraceType :uint8
 	Profile UMETA(DisplayName = "Profile预设")
 };
 
-/*交互检测信息
+/*检测信息
 */
 USTRUCT(BlueprintType)
-struct FIS_InteractTypeInfo
+struct FIS_TraceInfo
 {
 	GENERATED_BODY()
 public:
-	FIS_InteractTypeInfo() {}
+	FIS_TraceInfo() {}
 	//构造默认的检测信息
-	FIS_InteractTypeInfo(FGameplayTag TagType, EIS_TraceType TraceType)
+	FIS_TraceInfo(FGameplayTag TagType, EIS_TraceType TraceType)
 	{
-		InteractType = TagType;
+		InteractTypeTag = TagType;
 		InteractTraceType = TraceType;
 		switch (InteractTraceType)
 		{
@@ -107,9 +98,9 @@ public:
 		}
 	}
 public:
-	//交互类型
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (Categories = "InteractType"))
-	FGameplayTag InteractType;
+	//交互类型Tag
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FGameplayTag InteractTypeTag;
 	//检测类型——使用什么样式进行检测
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EIS_TraceType InteractTraceType = EIS_TraceType::Line;
@@ -201,6 +192,48 @@ public:
 	float DrawTime = 1.0f;
 };
 
+/*交互检测信息
+*/
+USTRUCT(BlueprintType)
+struct FIS_InteractTypeInfo : public FTableRowBase
+{
+	GENERATED_BODY()
+public:
+	FIS_InteractTypeInfo() {}
+	//构造默认的检测信息
+	FIS_InteractTypeInfo(FGameplayTag TagType, EIS_TraceType TraceType)
+	{
+		InteractTypeTag = TagType;
+		InteractTraceInfo = FIS_TraceInfo(TagType, TraceType);
+		BlockTraceInfo = FIS_TraceInfo(TagType, TraceType);
+	}
+
+	virtual void OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName) override
+	{
+		FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
+		if (InteractTypeTag.IsValid())
+		{
+			InteractTraceInfo.InteractTypeTag = InteractTypeTag;
+			BlockTraceInfo.InteractTypeTag = InteractTypeTag;
+		}
+	}
+public:
+	//交互类型Tag
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (Categories = "InteractType"))
+	FGameplayTag InteractTypeTag;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FIS_TraceInfo InteractTraceInfo;
+
+	/*是否开启阻挡判断
+	* 开启后在检测到目标后会再次发射一根在开始到结束两点间的射线，该射线用于检测阻挡物
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsBlockCheck = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditConditionHides, EditCondition = "bIsBlockCheck"))
+	FIS_TraceInfo BlockTraceInfo;
+};
+
 /**
  * 编辑器下的通用Task配置
  */
@@ -242,6 +275,10 @@ public:
 	//交互扩展配置表
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UDataTable> BeInteractExtendDataTable;
+
+	//交互检测信息配置表
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UDataTable> InteractTraceTypeInfoDataTable;
 
 	//交互跟踪类型映射<ID,跟踪检测信息>
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly)

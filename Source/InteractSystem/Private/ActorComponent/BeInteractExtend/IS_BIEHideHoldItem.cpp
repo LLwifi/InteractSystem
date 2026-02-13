@@ -22,7 +22,7 @@ void UIS_BIEHideHoldItem::Init_Implementation(UIS_BeInteractComponent* BeInterac
 	}
 }
 
-void UIS_BIEHideHoldItem::InteractStart_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEHideHoldItem::InteractStart_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	for (USceneComponent*& SceneCom : AllSceneComponent)
 	{
@@ -30,7 +30,7 @@ void UIS_BIEHideHoldItem::InteractStart_Implementation(UIS_InteractComponent* In
 	}
 }
 
-void UIS_BIEHideHoldItem::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent)
+void UIS_BIEHideHoldItem::InteractEnd_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	for (USceneComponent*& SceneCom : AllSceneComponent)
 	{
