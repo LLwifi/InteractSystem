@@ -179,6 +179,13 @@ public:
 	int32 GetInteractPriority();
 	virtual int32 GetInteractPriority_Implementation() { return 0; };
 
+	/*设置交互优先级
+	* 该值越大交互优先级越高
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	int32 SetInteractPriority(int32 NewInteractPriority);
+	virtual int32 SetInteractPriority_Implementation(int32 NewInteractPriority) { return NewInteractPriority; };
+
 	//开启/激活交互
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	bool SetInteractActive(bool NewActive);

@@ -259,6 +259,12 @@ int32 UIS_BeInteractComponent::GetInteractPriority_Implementation()
 	return BeInteractInfo.InteractPriority;
 }
 
+int32 UIS_BeInteractComponent::SetInteractPriority_Implementation(int32 NewInteractPriority)
+{
+	BeInteractInfo.InteractPriority = NewInteractPriority;
+	return BeInteractInfo.InteractPriority;
+}
+
 bool UIS_BeInteractComponent::SetInteractActive_Implementation(bool NewActive)
 {
 	BeInteractDynamicInfo.bInteractActive = NewActive;
@@ -623,7 +629,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Remove(InteractComponent);
 	BeInteractDynamicInfo.bIsInInteract = BeInteractDynamicInfo.AllInteractComponent.Num() > 0 ? true : false;//还有其他人交互吗
 	//不是由完成交互触发的结束交互
-	if (!BeInteractDynamicInfo.bIsComplete)
+	if (!BeInteractDynamicInfo.bIsComplete && InteractComponent)
 	{
 		//没完成交互的话，判断还有其他人在交互吗
 		if (InteractRoleSignInfo.Contains(InteractComponent->GetRoleSign()))//我结束时有没有与被交互目标产生过TimerHandle
@@ -673,7 +679,7 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 		{
 			if (BeInteractInfo.bInteractNumIsMultiplepeople)//交互次数分开记录吗
 			{
-				if (BeInteractInfo.EveryoneInteractNumSubtractType == EIS_InteractNumSubtractType::End)
+				if (BeInteractInfo.EveryoneInteractNumSubtractType == EIS_InteractNumSubtractType::End && InteractComponent)
 				{
 					BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 1, 0.0f, 0);
 				}

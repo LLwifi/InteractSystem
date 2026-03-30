@@ -95,6 +95,7 @@ public:
 	virtual EIS_InteractNumSubtractType GetInteractNumSubtractType_Implementation() override;
 	virtual FGameplayTagContainer GetInteractTag_Implementation() override;
 	virtual int32 GetInteractPriority_Implementation() override;
+	virtual int32 SetInteractPriority_Implementation(int32 NewInteractPriority) override;
 	virtual bool SetInteractActive_Implementation(bool NewActive) override;
 	virtual bool IsInteractActive_Implementation() override;
 

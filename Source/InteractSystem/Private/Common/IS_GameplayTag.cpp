@@ -1,4 +1,4 @@
-﻿#include "Common/IS_GameplayTag.h"
+#include "Common/IS_GameplayTag.h"
 
 
 UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_InteractType, "InteractType", "InteractType");
