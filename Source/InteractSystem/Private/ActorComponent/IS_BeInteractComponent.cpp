@@ -289,7 +289,7 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 		}
 		if (IsRoleHaveInteractNum && IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0)//交互次数是否足够
 		{
-			if (BeInteractDynamicInfo.AllInteractComponent.Num() <= BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
+			if (BeInteractDynamicInfo.AllInteractComponent.Num() < BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 			{
 				//if (BeInteractInfo.InteractVerifyInfo.Verify(InteractComponent, this, FailText))//交互验证
 				//{
