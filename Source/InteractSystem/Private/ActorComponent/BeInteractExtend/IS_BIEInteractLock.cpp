@@ -42,9 +42,9 @@ void UIS_BIEInteractLock::Init_Implementation(UIS_BeInteractComponent* BeInterac
 	}
 }
 
-bool UIS_BIEInteractLock::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
+bool UIS_BIEInteractLock::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText)
 {
-	Super::CanInteract_Implementation(InteractComponent, OuterCompareInfo, FailText);
+	Super::CanInteract_Implementation(InteractComponent, OuterCompareInfo, TraceTypeTag, FailText);
 
 	if (InteractComponent && InteractComponent->GetOwner())
 	{

@@ -90,6 +90,10 @@ struct FIS_InteractCompleteVerifyInfo
 {
 	GENERATED_BODY()
 public:
+	//是否在交互完成后再次进行交互前的判断
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bCanInteractAgain = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, InlineEditConditionToggle))
 	bool bOverride_CompleteInteractRoleNumVerify = false;
 	/*完成时的交互人数验证 >=时通过
@@ -110,6 +114,7 @@ public:
 	/*完成交互额外需要的验证类
 	* 该验证类可以是UI或者其他——例如QTEUI、3D场景解密
 	* 该UI在其他条件全部满足后的最后一步创建
+	* 注意：该类必须继承UIS_BeInteractVerifyInterface
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSoftClassPtr<UObject> CompleteVerifyClass;
@@ -127,18 +132,16 @@ public:
 	//交互UI类
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSoftClassPtr<UUserWidget> InteractTipPanelClass = UIS_Config::GetInstance()->DefaultInteractTipPanelClass;
-	//交互UI显示文本
+
+	//文本
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FText InteractText;
-	//文本颜色
+	TMap<FName, FText> Text = { {"Default",FText()} };
+	//颜色
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FLinearColor InteractTextColor = FLinearColor::White;
-	//交互纹理
+	TMap<FName, FLinearColor> Color = { {"Default",FLinearColor::White} };
+	//纹理
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TSoftObjectPtr<UTexture2D> InteractTexture2D;
-	//纹理颜色
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FLinearColor InteractTexture2DColor = FLinearColor::White;
+	TMap<FName, TSoftObjectPtr<UTexture2D>> Texture2D = { {"Default",nullptr} };
 };
 
 /*交互验证信息
@@ -400,9 +403,6 @@ struct FIS_BeInteractInfo : public FTableRowBase
 	GENERATED_BODY()
 public:
 	virtual void OnDataTableChanged(const UDataTable* InDataTable, const FName InRowName) override;
-	//{
-	//	FTableRowBase::OnDataTableChanged(InDataTable, InRowName);
-	//}
 public:
 	//在网络下交互响应的端
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -532,12 +532,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FIS_BeInteractExtendHandle> BeInteractExtendHandle;
 
-//public:
-//	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-//	TSubclassOf<UIS_BeInteractExtendBase> BeInteractExtendClass;
-//
-//	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditinLine))
-//	UIS_BeInteractExtendBase* BeInteractExtend = nullptr;
+
+	//UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	//TSubclassOf<UCameraShakePattern> BeInteractExtendClass = nullptr;
+
+	//UPROPERTY(EditAnywhere, meta = (EditinLine), BlueprintReadOnly)
+	//UCameraShakePattern* BeInteractExtend = nullptr;
 };
 
 /*被交互的动态信息

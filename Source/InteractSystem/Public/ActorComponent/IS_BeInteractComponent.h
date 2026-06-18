@@ -13,6 +13,8 @@ class UIS_BeInteractExtendBase;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractDelegate, UIS_InteractComponent*, InteractComponent, FGameplayTag, TraceTypeTag);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractVerifyDelegate, UIS_InteractComponent*, InteractComponent, UObject*, VerifyObject);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FInteractEnterOrLeaveDelegate, UIS_InteractComponent*, InteractComponent, FGameplayTag, TraceTypeTag);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FInteractFailDelegate, UIS_InteractComponent*, InteractComponent, UIS_BeInteractComponent*, BeInteractComponent, FGameplayTag, TraceTypeTag, FText, FailText);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInteractReplicatedDelegate, UIS_BeInteractComponent*, BeInteractComponent);
 
 /*某个签名被交互的其他信息
 */
@@ -74,17 +76,22 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	//初始化
+	UFUNCTION(BlueprintCallable)
+	void Init();
+
 	UFUNCTION()
 	void ReplicatedUsing_AllExtend();
+	UFUNCTION()
+	void ReplicatedUsing_BeInteractDynamicInfo();
 
 	//-----------------------------------------------------IIS_Interface
 	virtual FIS_BeInteractInfo GetBeInteractInfo_Implementation() override;
 	virtual FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo_Implementation() override;
-	virtual FIS_BeInteractUIInfo GetInteractUIInfo_Implementation() override;
+	virtual FIS_BeInteractUIInfo GetBeInteractUIInfo_Implementation() override;
+	virtual void GetBeInteractDisplayInfo_Implementation(FText& Text, FLinearColor& Color, UTexture2D*& Texture2D) override;
 	virtual FIS_BeInteractUIInfo SetInteractUIInfo_Implementation(FIS_BeInteractUIInfo UIInfo) override;
 	virtual bool IsDisplayInteractText_Implementation() override;
-	virtual FText GetInteractText_Implementation() override;
-	virtual void SetInteractText_Implementation(const FText& InteractText) override;
 	virtual EIS_InteractType GetInteractType_Implementation() override;
 	virtual int32 GetMultiInteractNum_Implementation() override;
 	virtual TArray<float> GetInteractTime_Implementation(float& TotalTime) override;
@@ -99,16 +106,16 @@ public:
 	virtual bool SetInteractActive_Implementation(bool NewActive) override;
 	virtual bool IsInteractActive_Implementation() override;
 
-	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText) override;
+	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText) override;
 	//开始进行第三方验证了
 	UPROPERTY(BlueprintAssignable)
 	FInteractVerifyDelegate OnInteractVerify;
 
 	virtual FIS_InteractCompleteVerifyInfo SetInteractCompleteVerifyInfo_Implementation(FIS_InteractCompleteVerifyInfo NewInteractCompleteVerifyInfo) override;
 
-	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent) override;
-	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass) override;
+	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
+	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
+	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag) override;
 	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	//移入可交互目标——仅自主客户端触发该事件
 	UPROPERTY(BlueprintAssignable)
@@ -182,6 +189,16 @@ public:
 	UFUNCTION(BlueprintPure)
 	UAnimMontage* GetMontageFromKeyName(FName KeyName = FName("Default"));
 
+	//获取被交互文本
+	UFUNCTION(BlueprintPure)
+	FText GetBeInteractText(FName KeyName = FName("Default"));
+	//获取被交互颜色
+	UFUNCTION(BlueprintPure)
+	FLinearColor GetBeInteractColor(FName KeyName = FName("Default"));
+	//获取被交互纹理
+	UFUNCTION(BlueprintPure)
+	UTexture2D* GetBeInteractTexture2D(FName KeyName = FName("Default"));
+
 	/*通过片段下标获取交互蒙太奇某段动画的时长
 	* return : -1表示未成功获取
 	*/
@@ -205,7 +222,7 @@ public:
 	* 需要注意的是UI只能在客户端创建
 	*/
 	UFUNCTION(NetMulticast, Reliable)
-	void CreateVerifyUI(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass);
+	void CreateVerifyUI(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag);
 
 	/*通过签名获取某个交互者当前已经交互的时间
 	* 若交互方式允许多人累加返回BeInteractDynamicInfo.InteractCumulativeTime
@@ -252,7 +269,7 @@ public:
 
 	//检测全部扩展类是否允许交互
 	UFUNCTION(BlueprintPure)
-	bool CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText);
+	bool CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText);
 
 	/*通过Handle创建被交互扩展
 	* 注意：开启了网络同步后，在服务器创建会将扩展同步给其他端
@@ -269,7 +286,13 @@ public:
 	//通过类型获取扩展
 	UFUNCTION(BlueprintCallable, meta = (DeterminesOutputType = "ExtendClass"))
 	UIS_BeInteractExtendBase* GetExtendFromClass(TSubclassOf<UIS_BeInteractExtendBase> ExtendClass);
+
+
 public:
+	//交互失败事件
+	UPROPERTY(BlueprintAssignable)
+	FInteractFailDelegate InteractFailDelegate;
+
 	/*交互相关事件的网络复制决策
 	* 使用该功能必须保证其Owner具有网络复制的能力，否则该项改动无效
 	*/
@@ -306,8 +329,11 @@ public:
 	AActor* SceneActorPickup;
 
 	//被交互的动态信息
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = ReplicatedUsing_BeInteractDynamicInfo)
 	FIS_BeInteractDynamicInfo BeInteractDynamicInfo;
+
+	UPROPERTY(BlueprintAssignable)
+	FInteractReplicatedDelegate Replicated_BeInteractDynamicInfo;
 
 	//被交互的交互签名信息<角色签名,签名信息>
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

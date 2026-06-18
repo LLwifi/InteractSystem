@@ -38,11 +38,64 @@ public:
 	* 确定完成时调用BeInteractComponent的InteractComplete接口
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void InteractVerifyStart(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent);
-	virtual void InteractVerifyStart_Implementation(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent) {};
+	void InteractVerifyStart(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag);
+	virtual void InteractVerifyStart_Implementation(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag) {};
 };
 
+UINTERFACE(MinimalAPI)
+class UIS_BeInteractOwnerDisplayInterface : public UInterface
+{
+	GENERATED_BODY()
+};
 
+/**
+ * 可被交互单位的显示接口：该接口由可被交互物继承
+ */
+class INTERACTSYSTEM_API IIS_BeInteractOwnerDisplayInterface
+{
+	GENERATED_BODY()
+public:
+	/*获取用户界面信息
+	* OverrideInfo：要重载的数据
+	* Return：是否重载，返回false时仍然使用原本的被交互组件配置的数据
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	bool GetDisplayInfo(UIS_BeInteractComponent* BeInteractComponent, FText& Text, FLinearColor& Color, UTexture2D*& Texture2D);
+	virtual bool GetDisplayInfo_Implementation(UIS_BeInteractComponent* BeInteractComponent, FText& Text, FLinearColor& Color, UTexture2D*& Texture2D) { return true; };
+};
+
+// This class does not need to be modified.
+UINTERFACE(MinimalAPI)
+class UIS_BeInteractOwnerCheckInterface : public UInterface
+{
+	GENERATED_BODY()
+};
+
+/**
+ * 可被交互单位的检查接口：该接口可以由可被交互物继承，分为两种检查情况
+ * 交互前的检查-能不能摸：表示当前的条件/状态是否允许交互
+ * 交互动作完成的再次检查-能不能打开：通常是持续交互会使用，在持续交互完成后，再次判断
+ */
+class INTERACTSYSTEM_API IIS_BeInteractOwnerCheckInterface
+{
+	GENERATED_BODY()
+
+	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
+public:
+	/*交互前的检查
+	* 能不能摸：表示当前的条件/状态是否允许交互
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	bool BeforeOperationCheck(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag, FText& FailText);
+	virtual bool BeforeOperationCheck_Implementation(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag, FText& FailText) { return true; };
+
+	/*交互后的检查
+	* 能不能打开：通常是持续交互会使用，在持续交互完成后，再次判断
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	bool AfterOperationCheck(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag, FText& FailText);
+	virtual bool AfterOperationCheck_Implementation(UIS_InteractComponent* InteractComponent, UIS_BeInteractComponent* BeInteractComponent, FGameplayTag TraceTypeTag, FText& FailText) { return true; };
+};
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
@@ -72,11 +125,18 @@ public:
 	virtual FIS_BeInteractDynamicInfo GetBeInteractDynamicInfo_Implementation() { return FIS_BeInteractDynamicInfo(); };
 
 	/*
-	* 获取用户界面信息
+	* 获取用户界面结构体信息
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	FIS_BeInteractUIInfo GetInteractUIInfo();
-	virtual FIS_BeInteractUIInfo GetInteractUIInfo_Implementation() { return FIS_BeInteractUIInfo(); };
+	FIS_BeInteractUIInfo GetBeInteractUIInfo();
+	virtual FIS_BeInteractUIInfo GetBeInteractUIInfo_Implementation() { return FIS_BeInteractUIInfo(); };
+
+	/*
+	* 获取被交互的显示信息信息
+	*/
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void GetBeInteractDisplayInfo(FText& Text, FLinearColor& Color, UTexture2D*& Texture2D);
+	virtual void GetBeInteractDisplayInfo_Implementation(FText& Text, FLinearColor& Color, UTexture2D*& Texture2D) {};
 
 	/*
 	* 设置用户界面信息
@@ -91,19 +151,6 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	bool IsDisplayInteractText();
 	virtual bool IsDisplayInteractText_Implementation() { return true; };
-
-	/*
-	* 获取交互显示文本
-	*/
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-		FText GetInteractText();
-	virtual FText GetInteractText_Implementation(){ return FText(); };
-	/*
-	* 设置交互显示文本
-	*/
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void SetInteractText(const FText& InteractText);
-	virtual void SetInteractText_Implementation(const FText& InteractText) {};
 
 	/*
 	* 获取交互类型
@@ -203,8 +250,8 @@ public:
 	* 再进行额外的比对，当比对通过时，允许交互
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	bool CanInteract(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText);
-	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText) { return true; };
+	bool CanInteract(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText);
+	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText) { return true; };
 
 	/*
 	* 设置交互完成时的验证信息
@@ -221,24 +268,24 @@ public:
 	* return：返回会true时表示验证通过，返回false表示验证不通过或有其他待验证的事项
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	bool InteractCompleteVerifyCheck(UIS_InteractComponent* InteractComponent);
-	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent) { return true; };
+	bool InteractCompleteVerifyCheck(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual bool InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) { return true; };
 
 	/*创建交互验证对象
 	* 需要判断class是UI还是Object还是Actor
 	* 需要注意的是UI只能在客户端创建
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	UObject* CreateVerifyObject(UIS_InteractComponent* InteractComponent);
-	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent) { return nullptr; };
+	UObject* CreateVerifyObject(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+	virtual UObject* CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) { return nullptr; };
 
 	/*创建交互验证对象——UI
 	* 需要注意的是UI只能在客户端创建
 	* 该函数在BeInteractComponent上会被多播
 	*/
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	UUserWidget* CreateVerifyObject_UI(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass);
-	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass) { return nullptr; };
+	UUserWidget* CreateVerifyObject_UI(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag);
+	virtual UUserWidget* CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag) { return nullptr; };
 
 	/*
 	* 移入可交互目标——仅在客户端触发

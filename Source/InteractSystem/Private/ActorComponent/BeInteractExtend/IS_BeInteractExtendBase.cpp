@@ -100,7 +100,7 @@ void UIS_BeInteractExtendBase::Init_Implementation(UIS_BeInteractComponent* BeIn
 
 }
 
-bool UIS_BeInteractExtendBase::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
+bool UIS_BeInteractExtendBase::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText)
 {
 	return true;
 }

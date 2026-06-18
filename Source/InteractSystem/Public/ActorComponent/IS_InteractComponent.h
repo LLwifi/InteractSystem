@@ -14,6 +14,7 @@
 class UIS_BeInteractComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FIS_InteractEvent, UIS_InteractComponent*, InteractComponent, UIS_BeInteractComponent*, BeInteractComponent, FGameplayTag, TraceTypeTag);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FIS_TraceDebugEvent, UIS_InteractComponent*, InteractComponent, const TArray<FHitResult>&, OutHit, FGameplayTag, TraceTypeTag);
 
 USTRUCT(BlueprintType)
 struct FIS_BeInteractComponentArray
@@ -229,4 +230,11 @@ public:
 	//默认对比信息
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FCC_CompareInfo DefaultCompareInfo;
+
+	//检测调试类型 主要用于调试查看
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FGameplayTag TraceDebugTypeTag;
+
+	UPROPERTY(BlueprintAssignable)
+	FIS_TraceDebugEvent TraceDebugEvent;
 };

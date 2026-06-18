@@ -113,7 +113,7 @@ void FIS_BeInteractInfo::OnDataTableChanged(const UDataTable* InDataTable, const
 	//{
 	//	if (!BeInteractExtend || BeInteractExtend->GetClass() != BeInteractExtendClass)
 	//	{
-	//		BeInteractExtend = NewObject<UIS_BeInteractExtendBase>(const_cast<UDataTable*>(InDataTable), BeInteractExtendClass);
+	//		BeInteractExtend = NewObject<UCameraShakePattern>(const_cast<UDataTable*>(InDataTable), BeInteractExtendClass);
 	//	}
 	//}
 	//else

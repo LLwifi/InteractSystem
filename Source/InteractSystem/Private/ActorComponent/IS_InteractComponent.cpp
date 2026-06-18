@@ -176,7 +176,7 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::GetCurInteractComponentF
 bool UIS_InteractComponent::TriggerInteract(UPARAM(Ref)UIS_BeInteractComponent*& BeInteractCom, FCC_CompareInfo CompareInfo, FGameplayTag TraceTypeTag, FText& FailText)
 {
 	bool ReturnBool = false;
-	if (BeInteractCom && IIS_BeInteractInterface::Execute_CanInteract(BeInteractCom, this, CompareInfo, FailText))
+	if (BeInteractCom && IIS_BeInteractInterface::Execute_CanInteract(BeInteractCom, this, CompareInfo, TraceTypeTag, FailText))
 	{
 		StartInteract(BeInteractCom, TraceTypeTag);
 		UpdateInteractTarget(BeInteractCom, TraceTypeTag);
@@ -416,6 +416,8 @@ bool UIS_InteractComponent::TraceFromTypeInfo(FIS_TraceInfo TraceInfo, TArray<FH
 		break;
 	}
 
+	TraceDebugEvent.Broadcast(this, OutHit, TraceDebugTypeTag);
+
 	return OutHit.Num() > 0;
 }
 
@@ -459,6 +461,7 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::TraceCheckFromTypeTag(FG
 	TArray<UIS_BeInteractComponent*> AllBeInteractCom;
 	if (UIS_Config::GetInstance()->InteractTraceTypeMapping.Contains(TraceTypeTag))
 	{
+		TraceDebugTypeTag = TraceTypeTag;
 		AllBeInteractCom = TraceCheckFromTypeInfo(UIS_Config::GetInstance()->InteractTraceTypeMapping[TraceTypeTag], TopPriorityCom);
 	}
 	return AllBeInteractCom;
@@ -476,7 +479,7 @@ TArray<UIS_BeInteractComponent*> UIS_InteractComponent::InteractEnterCheckFromTr
 			//BeInteractCom有效（拾取道具会在交互后删除目标） && 曾经进入的交互组件不在新一批的交互组件中 && 检测类型是否通过
 			if (BeInteractCom && !AllBeInteractCom.Contains(BeInteractCom) && BeInteractCom->TraceTypeCheck(TraceTypeTag, false))
 			{
-				//不在，触发离开事件 离开需要触发交互结束，因此离开需要在服务器上被调用
+				//不在，触发离开事件 离开需要触发交互结束，因此离开需要在服务器上被调用n
 				ServerLeaveInteractCheck(BeInteractCom, TraceTypeTag);
 				IIS_BeInteractInterface::Execute_InteractLeave(BeInteractCom, this, TraceTypeTag);//客户端仍然需要移除该检测类型
 				//UpdateInteractTarget(nullptr, TraceTypeTag);//广播交互事件

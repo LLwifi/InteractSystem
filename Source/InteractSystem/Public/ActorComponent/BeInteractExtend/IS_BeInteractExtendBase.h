@@ -51,7 +51,7 @@ public:
 	void Init(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);
 	virtual void Init_Implementation(UIS_BeInteractComponent* BeInteractCom, UIS_BeInteractExtendBase* Data);
 
-	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText) override;
+	virtual bool CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText) override;
 
 	virtual void InteractEnter_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;
 	virtual void InteractLeave_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag) override;

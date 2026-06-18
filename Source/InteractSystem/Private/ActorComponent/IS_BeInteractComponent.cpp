@@ -73,28 +73,22 @@ void UIS_BeInteractComponent::BeginPlay()
 	{
 		UIS_BlueprintFunctionLibrary::GetBeInteractInfoFromHandle(BeInteractInfoHandle, BeInteractInfo);
 	}
-
-	if (GetOwner()->GetLocalRole() == ENetRole::ROLE_Authority)
+	
+	//配置的响应端是客户端还是服务器/或都有
+	if (BeInteractInfo.NetType == EIS_InteractEventNetType::Server || BeInteractInfo.NetType == EIS_InteractEventNetType::NetMulticast)
 	{
-		//生成扩展
-		TArray<FIS_BeInteractExtendHandle> UseBeInteractExtend;
-		if (bIsOverrideBeInteractExtend)
+		//如果是服务器或多端响应，说明Actor勾选了网络复制，此时以服务器为准，在服务器上初始化
+		if (GetOwner()->GetLocalRole() == ENetRole::ROLE_Authority)
 		{
-			UseBeInteractExtend = OverrideBeInteractExtendHandles;
+			Init();
 		}
-		else
-		{
-			UseBeInteractExtend = BeInteractInfo.BeInteractExtendHandle;
-		}
-
-		UseBeInteractExtend.Append(AddBeInteractExtendHandles);
-
-		AddBeInteractExtendFromHandle_Array(UseBeInteractExtend);
+	}
+	else
+	{
+		Init();
 	}
 
-	IIS_BeInteractInterface::Execute_SetInteractTime(this, BeInteractInfo.InteractTime);
-	IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractInfo.InteractNum);
-	IIS_BeInteractInterface::Execute_SetInteractActive(this, BeInteractInfo.bDefaultInteractActive);
+
 }
 
 void UIS_BeInteractComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -124,12 +118,39 @@ void UIS_BeInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	// ...
 }
 
+void UIS_BeInteractComponent::Init()
+{
+	//生成扩展
+	TArray<FIS_BeInteractExtendHandle> UseBeInteractExtend;
+	if (bIsOverrideBeInteractExtend)
+	{
+		UseBeInteractExtend = OverrideBeInteractExtendHandles;
+	}
+	else
+	{
+		UseBeInteractExtend = BeInteractInfo.BeInteractExtendHandle;
+	}
+
+	UseBeInteractExtend.Append(AddBeInteractExtendHandles);
+
+	AddBeInteractExtendFromHandle_Array(UseBeInteractExtend);
+
+	IIS_BeInteractInterface::Execute_SetInteractTime(this, BeInteractInfo.InteractTime);
+	IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractInfo.InteractNum);
+	IIS_BeInteractInterface::Execute_SetInteractActive(this, BeInteractInfo.bDefaultInteractActive);
+}
+
 void UIS_BeInteractComponent::ReplicatedUsing_AllExtend()
 {
 	//for (UIS_BeInteractExtendBase*& Extend : AllExtend)
 	//{
 	//	Server_SyncInit_RepCheck(Extend, Extend->NetType);
 	//}
+}
+
+void UIS_BeInteractComponent::ReplicatedUsing_BeInteractDynamicInfo()
+{
+	Replicated_BeInteractDynamicInfo.Broadcast(this);
 }
 
 FIS_BeInteractInfo UIS_BeInteractComponent::GetBeInteractInfo_Implementation()
@@ -142,13 +163,33 @@ FIS_BeInteractDynamicInfo UIS_BeInteractComponent::GetBeInteractDynamicInfo_Impl
 	return BeInteractDynamicInfo;
 }
 
-FIS_BeInteractUIInfo UIS_BeInteractComponent::GetInteractUIInfo_Implementation()
+FIS_BeInteractUIInfo UIS_BeInteractComponent::GetBeInteractUIInfo_Implementation()
 {
+	FIS_BeInteractUIInfo UIInfo = BeInteractInfo.InteractUIInfo;
 	if (CurInteractRoleSignInfo.InteractTypeTag.IsValid() && BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].bIsDisplayInteractUI && BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].bIsOverrideInteractUIInfo)
 	{
-		return BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].OverrideInteractUIInfo;
+		UIInfo = BeInteractInfo.InteractTypeVerifyInfo[CurInteractRoleSignInfo.InteractTypeTag].OverrideInteractUIInfo;
 	}
-	return BeInteractInfo.InteractUIInfo;
+	return UIInfo;
+}
+
+void UIS_BeInteractComponent::GetBeInteractDisplayInfo_Implementation(FText& Text, FLinearColor& Color, UTexture2D*& Texture2D)
+{
+	Text = GetBeInteractText();
+	Color = GetBeInteractColor();
+	Texture2D = GetBeInteractTexture2D();
+	if (GetOwner()->Implements<UIS_BeInteractOwnerDisplayInterface>())//GetOwner是否继承了交互相关接口
+	{
+		FText OwnerText;
+		FLinearColor OwnerColor;
+		UTexture2D* OwnerTexture2D;
+		if (IIS_BeInteractOwnerDisplayInterface::Execute_GetDisplayInfo(GetOwner(), this, OwnerText, OwnerColor, OwnerTexture2D))
+		{
+			Text = OwnerText;
+			Color = OwnerColor;
+			Texture2D = OwnerTexture2D;
+		}
+	}
 }
 
 FIS_BeInteractUIInfo UIS_BeInteractComponent::SetInteractUIInfo_Implementation(FIS_BeInteractUIInfo UIInfo)
@@ -159,21 +200,11 @@ FIS_BeInteractUIInfo UIS_BeInteractComponent::SetInteractUIInfo_Implementation(F
 
 bool UIS_BeInteractComponent::IsDisplayInteractText_Implementation()
 {
-	if (!BeInteractInfo.InteractUIInfo.InteractText.IsEmpty() && (BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bNotActiveIsDisplayInteractText))
+	if ((BeInteractDynamicInfo.bInteractActive ? true : BeInteractInfo.bNotActiveIsDisplayInteractText))
 	{
 		return true;
 	}
 	return false;
-}
-
-FText UIS_BeInteractComponent::GetInteractText_Implementation()
-{
-	return BeInteractInfo.InteractUIInfo.InteractText;
-}
-
-void UIS_BeInteractComponent::SetInteractText_Implementation(const FText& InteractText)
-{
-	BeInteractInfo.InteractUIInfo.InteractText = InteractText;
 }
 
 EIS_InteractType UIS_BeInteractComponent::GetInteractType_Implementation()
@@ -276,7 +307,7 @@ bool UIS_BeInteractComponent::IsInteractActive_Implementation()
 	return BeInteractDynamicInfo.bInteractActive;
 }
 
-bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
+bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText)
 {
 	FailText = FText();
 	if (IIS_BeInteractInterface::Execute_IsInteractActive(this))//是否激活
@@ -291,13 +322,23 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 		{
 			if (BeInteractDynamicInfo.AllInteractComponent.Num() < BeInteractInfo.SameTimeInteractRoleNum)//同时交互人数
 			{
-				//if (BeInteractInfo.InteractVerifyInfo.Verify(InteractComponent, this, FailText))//交互验证
-				//{
-					if (CanInteract_Extend(InteractComponent, OuterCompareInfo, FailText))//扩展类的额外判断
+				if (CanInteract_Extend(InteractComponent, OuterCompareInfo, TraceTypeTag, FailText))//扩展类的额外判断
+				{
+					if (BeInteractInfo.BeCompareInfo.CompareResult(OuterCompareInfo, FailText))//通用比对
 					{
-						return BeInteractInfo.BeCompareInfo.CompareResult(OuterCompareInfo, FailText);
+						if (GetOwner()->Implements<UIS_BeInteractOwnerCheckInterface>())//GetOwner是否继承了检查接口
+						{
+							if (IIS_BeInteractOwnerCheckInterface::Execute_BeforeOperationCheck(GetOwner(), InteractComponent, this, TraceTypeTag, FailText))//Owner的检查
+							{
+								return true;
+							}
+						}
+						else
+						{
+							return true;
+						}
 					}
-				//}
+				}
 			}
 			else
 			{
@@ -313,6 +354,8 @@ bool UIS_BeInteractComponent::CanInteract_Implementation(UIS_InteractComponent* 
 	{
 		FailText = BeInteractInfo.InteractActive_FailText;
 	}
+
+	InteractFailDelegate.Broadcast(InteractComponent, this, TraceTypeTag, FailText);//交互失败事件
 	return false;
 }
 
@@ -322,24 +365,28 @@ FIS_InteractCompleteVerifyInfo UIS_BeInteractComponent::SetInteractCompleteVerif
 	return BeInteractInfo.InteractCompleteVerifyInfo;
 }
 
-bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent)
+bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	BeInteractDynamicInfo.bIsVerifying = true;
 	//人数验证
 	InteractRoleNumVerifyBack();//首次主动调用，判断是否通过
 	if (BeInteractDynamicInfo.bVerifyInteractRoleNumPass)
 	{
+		if (BeInteractInfo.InteractCompleteVerifyInfo.bCanInteractAgain)
+		{
+			//再次进行交互前的判断 后续补齐
+		}
 		//其他验证需求
 		if (BeInteractDynamicInfo.InteractVerifyObject || !BeInteractInfo.InteractCompleteVerifyInfo.CompleteVerifyClass.IsNull())
 		{
 			if (!BeInteractDynamicInfo.InteractVerifyObject)//是否需要创建验证对象
 			{
-				BeInteractDynamicInfo.InteractVerifyObject = IIS_BeInteractInterface::Execute_CreateVerifyObject(this, InteractComponent);
+				BeInteractDynamicInfo.InteractVerifyObject = IIS_BeInteractInterface::Execute_CreateVerifyObject(this, InteractComponent, TraceTypeTag);
 			}
 
 			if (BeInteractDynamicInfo.InteractVerifyObject)//是否有额外的验证对象
 			{
-				IIS_BeInteractVerifyInterface::Execute_InteractVerifyStart(BeInteractDynamicInfo.InteractVerifyObject, InteractComponent, this);
+				IIS_BeInteractVerifyInterface::Execute_InteractVerifyStart(BeInteractDynamicInfo.InteractVerifyObject, InteractComponent, this, TraceTypeTag);
 			}
 
 			switch (InteractEventNetType)
@@ -372,7 +419,7 @@ bool UIS_BeInteractComponent::InteractCompleteVerifyCheck_Implementation(UIS_Int
 	return false;
 }
 
-UObject* UIS_BeInteractComponent::CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent)
+UObject* UIS_BeInteractComponent::CreateVerifyObject_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	//需要判断class是UI还是Object还是Actor
 	UClass* CreateClass = UAssetManager::GetStreamableManager().LoadSynchronous(BeInteractInfo.InteractCompleteVerifyInfo.CompleteVerifyClass);
@@ -384,7 +431,7 @@ UObject* UIS_BeInteractComponent::CreateVerifyObject_Implementation(UIS_Interact
 		}
 		else if(CreateClass->IsChildOf(UUserWidget::StaticClass()))//UUserWidget
 		{
-			CreateVerifyUI(InteractComponent, CreateClass);
+			CreateVerifyUI(InteractComponent, CreateClass, TraceTypeTag);
 			return nullptr;//UI不能创建在服务器上
 			//UUserWidget* UI = CreateWidget(GetWorld(), CreateClass);
 			//if (UI)
@@ -402,7 +449,7 @@ UObject* UIS_BeInteractComponent::CreateVerifyObject_Implementation(UIS_Interact
 	return nullptr;
 }
 
-UUserWidget* UIS_BeInteractComponent::CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass)
+UUserWidget* UIS_BeInteractComponent::CreateVerifyObject_UI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag)
 {
 	UUserWidget* UI = nullptr;
 	if (InteractComponent && InteractComponent->GetOwner()->GetLocalRole() == ENetRole::ROLE_AutonomousProxy)
@@ -418,7 +465,7 @@ UUserWidget* UIS_BeInteractComponent::CreateVerifyObject_UI_Implementation(UIS_I
 		}
 		if (BeInteractDynamicInfo.InteractVerifyObject)//是否有额外的验证对象
 		{
-			IIS_BeInteractVerifyInterface::Execute_InteractVerifyStart(BeInteractDynamicInfo.InteractVerifyObject, InteractComponent, this);
+			IIS_BeInteractVerifyInterface::Execute_InteractVerifyStart(BeInteractDynamicInfo.InteractVerifyObject, InteractComponent, this, TraceTypeTag);
 		}
 	}
 	return UI;
@@ -1063,6 +1110,36 @@ UAnimMontage* UIS_BeInteractComponent::GetMontageFromKeyName(FName KeyName)
 	return nullptr;
 }
 
+FText UIS_BeInteractComponent::GetBeInteractText(FName KeyName)
+{
+	FIS_BeInteractUIInfo UIInfo = IIS_BeInteractInterface::Execute_GetBeInteractUIInfo(this);
+	if (UIInfo.Text.Contains(KeyName))
+	{
+		return UIInfo.Text[KeyName];
+	}
+	return FText();
+}
+
+FLinearColor UIS_BeInteractComponent::GetBeInteractColor(FName KeyName)
+{
+	FIS_BeInteractUIInfo UIInfo = IIS_BeInteractInterface::Execute_GetBeInteractUIInfo(this);
+	if (UIInfo.Color.Contains(KeyName))
+	{
+		return UIInfo.Color[KeyName];
+	}
+	return FLinearColor();
+}
+
+UTexture2D* UIS_BeInteractComponent::GetBeInteractTexture2D(FName KeyName)
+{
+	FIS_BeInteractUIInfo UIInfo = IIS_BeInteractInterface::Execute_GetBeInteractUIInfo(this);
+	if (UIInfo.Texture2D.Contains(KeyName))
+	{
+		return UIInfo.Texture2D[KeyName].LoadSynchronous();
+	}
+	return nullptr;
+}
+
 float UIS_BeInteractComponent::GetInteractMontageSectionLengthFromIndex(UAnimMontage* Montage, int32 SectionIndex)
 {
 	if (Montage && Montage->IsValidSectionIndex(SectionIndex))
@@ -1096,9 +1173,9 @@ void UIS_BeInteractComponent::InteractTraceTypeEnterOrLeave_Implementation(FGame
 	}
 }
 
-void UIS_BeInteractComponent::CreateVerifyUI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass)
+void UIS_BeInteractComponent::CreateVerifyUI_Implementation(UIS_InteractComponent* InteractComponent, TSubclassOf<UUserWidget> UIClass, FGameplayTag TraceTypeTag)
 {
-	IIS_BeInteractInterface::Execute_CreateVerifyObject_UI(this, InteractComponent, UIClass);
+	IIS_BeInteractInterface::Execute_CreateVerifyObject_UI(this, InteractComponent, UIClass, TraceTypeTag);
 }
 
 float UIS_BeInteractComponent::GetCurInteractTimeFromRoleSign(FName RoleSign)
@@ -1112,13 +1189,33 @@ float UIS_BeInteractComponent::GetCurInteractTimeFromRoleSign(FName RoleSign)
 
 bool UIS_BeInteractComponent::TryInteractComplete(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
+	bool ReturnBool = false;
+	FText FailText;
 	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Add(InteractComponent);
-	if (IIS_BeInteractInterface::Execute_InteractCompleteVerifyCheck(this, InteractComponent))//交互验证
+	if (IIS_BeInteractInterface::Execute_InteractCompleteVerifyCheck(this, InteractComponent, TraceTypeTag))//交互验证
+	{
+		if (GetOwner()->Implements<UIS_BeInteractOwnerCheckInterface>())//GetOwner是否继承了检查接口
+		{
+			if (IIS_BeInteractOwnerCheckInterface::Execute_AfterOperationCheck(GetOwner(), InteractComponent, this, TraceTypeTag, FailText))
+			{
+				ReturnBool = true;
+			}
+		}
+		else
+		{
+			ReturnBool = true;
+		}
+	}
+
+	if (ReturnBool)
 	{
 		IIS_BeInteractInterface::Execute_InteractComplete(this, InteractComponent, TraceTypeTag);
-		return true;
 	}
-	return false;
+	else
+	{
+		InteractFailDelegate.Broadcast(InteractComponent, this, TraceTypeTag, FailText);//交互失败事件
+	}
+	return ReturnBool;
 }
 
 float UIS_BeInteractComponent::GetAngleFromTargetDir(FVector TargetDir)
@@ -1312,12 +1409,12 @@ bool UIS_BeInteractComponent::TraceTypeCheck(FGameplayTag TraceTypeTag, bool IsE
 	return false;
 }
 
-bool UIS_BeInteractComponent::CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FText& FailText)
+bool UIS_BeInteractComponent::CanInteract_Extend(UIS_InteractComponent* InteractComponent, FCC_CompareInfo OuterCompareInfo, FGameplayTag TraceTypeTag, FText& FailText)
 {
 	FailText = FText();
 	for (UIS_BeInteractExtendBase*& BeInteractExtend : AllExtend)
 	{
-		if (!IIS_BeInteractInterface::Execute_CanInteract(BeInteractExtend, InteractComponent, OuterCompareInfo, FailText))
+		if (!IIS_BeInteractInterface::Execute_CanInteract(BeInteractExtend, InteractComponent, OuterCompareInfo, TraceTypeTag, FailText))
 		{
 			return false;
 		}
