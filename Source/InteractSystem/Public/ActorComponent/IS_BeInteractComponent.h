@@ -184,6 +184,13 @@ public:
 	void NetMulti_CallBeInteractInterface_Extend(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
 
 	//-----------------------------------------------------------------------------------------Net
+
+	/*某人结束了交互
+	* 可能存在多人同时交互的情况，该函数会判断当前是否一个人都没有与自己交互，此时会调用InteractEnd
+	*/
+	UFUNCTION(Blueprintcallable)
+	void SomeoneInteractEnd(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag);
+
 	/*通过配置名称获取蒙太奇
 	*/
 	UFUNCTION(BlueprintPure)

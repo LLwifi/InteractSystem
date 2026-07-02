@@ -98,7 +98,7 @@ void UIS_InteractComponent::EndCurInteract(FGameplayTag TraceTypeTag)
 	//有些组件在交互完后被立刻删除了，可能会导致来不及触发结束
 	if (CurStartInteractComponent)
 	{
-		IIS_BeInteractInterface::Execute_InteractEnd(CurStartInteractComponent, this, TraceTypeTag);
+		CurStartInteractComponent->SomeoneInteractEnd(this, TraceTypeTag);
 		CurStartInteractComponent = nullptr;
 	}
 }

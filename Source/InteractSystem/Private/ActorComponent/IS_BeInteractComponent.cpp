@@ -556,6 +556,7 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	BeInteractDynamicInfo.AllInteractComponent.Add(InteractComponent);
 
 	//部分签名信息
+	CurInteractRoleSignInfo = FIS_InteractRoleSignInfo();
 	CurInteractRoleSignInfo.InteractComponent = InteractComponent;
 	CurInteractRoleSignInfo.RoleSign = InteractComponent->GetRoleSign();
 	CurInteractRoleSignInfo.InteractTypeTag = TraceTypeTag;
@@ -563,10 +564,7 @@ void UIS_BeInteractComponent::InteractStart_Implementation(UIS_InteractComponent
 	{
 		CurInteractRoleSignInfo.InteractCount = InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractCount;
 	}
-	else
-	{
-		CurInteractRoleSignInfo.InteractCount = 0;//如果是新的人交互时需要清空一下之前人的交互次数赋予给新的人
-	}
+
 	InteractRoleSignInfo.Add(InteractComponent->GetRoleSign(), CurInteractRoleSignInfo);//瞬间交互立刻就需要数据这里先添加一下 需要注意的是，此时交互Timer还没生效
 
 	if (BeInteractInfo.InteractNumSubtractType == EIS_InteractNumSubtractType::Start)
@@ -683,7 +681,6 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 		{
 			GetWorld()->GetTimerManager().ClearTimer(InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractTimerHandle);
 		}
-		InteractRoleSignInfo.Remove(InteractComponent->GetRoleSign());//移除结束交互者的TimerHandle
 		
 		switch (BeInteractInfo.InteractCumulativeTimeType)//交互累计类型
 		{
@@ -790,6 +787,19 @@ void UIS_BeInteractComponent::InteractEnd_Implementation(UIS_InteractComponent* 
 			break;
 		}
 	}
+
+	if (IIS_BeInteractInterface::Execute_GetInteractNum(this) > 0)//交互次数是否足够
+	{
+		//没有交互次数了才会停掉全部timer，否则其他单位可能还在交互
+		for (TPair<FName, FIS_InteractRoleSignInfo>& pair : InteractRoleSignInfo)
+		{
+			GetWorld()->GetTimerManager().ClearTimer(pair.Value.InteractTimerHandle);
+			pair.Value.InteractComponent = nullptr;
+			pair.Value.InteractTypeTag = FGameplayTag();
+		}
+		BeInteractDynamicInfo.AllInteractComponent.Empty();//清除当前跟我交互的全部组件
+		BeInteractDynamicInfo.AllTryCompleteInteractComponent.Empty();
+	}
 }
 
 void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
@@ -800,7 +810,10 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 		BeInteractDynamicInfo.ClearInteractTimeFromRoleSign(InteractComponent->GetRoleSign());//交互完成需要清除历史记录中该交互者的交互时间
 		BeInteractDynamicInfo.ClearInteractCompleteCountFromRoleSign(InteractComponent->GetRoleSign());//清除该交互者的交互完成次数
 
-		InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractCount++;
+		if (InteractRoleSignInfo.Contains(InteractComponent->GetRoleSign()))
+		{
+			InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractCount++;
+		}
 	}
 
 	BeInteractDynamicInfo.bIsComplete = true;
@@ -808,16 +821,6 @@ void UIS_BeInteractComponent::InteractComplete_Implementation(UIS_InteractCompon
 	BeInteractDynamicInfo.InteractCumulativeTime = 0.0f;//清除统一累计时长
 	BeInteractDynamicInfo.InteractCompleteCount = 0;//清除多段交互完成次数
 	GetWorld()->GetTimerManager().ClearTimer(InteractRoleNumVerifyTimerHandle);//停止检测交互人数
-	//停掉全部Timer
-	for (TPair<FName, FIS_InteractRoleSignInfo>& pair : InteractRoleSignInfo)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(pair.Value.InteractTimerHandle);
-		pair.Value.InteractComponent = nullptr;
-		pair.Value.InteractTypeTag = FGameplayTag();
-	}
-	//InteractRoleSignInfo.Empty();
-	BeInteractDynamicInfo.AllInteractComponent.Empty();//清除当前跟我交互的全部组件
-	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Empty();
 
 	if (BeInteractInfo.bInteractNumIsMultiplepeople)//交互次数分开记录吗
 	{
@@ -1099,6 +1102,44 @@ void UIS_BeInteractComponent::NetClient_CallBeInteractInterface_Extend_Implement
 void UIS_BeInteractComponent::NetMulti_CallBeInteractInterface_Extend_Implementation(EIS_BeInteractInterfaceType InterfaceType, UIS_BeInteractExtendBase* Extend, UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
 {
 	CallBeInteractInterface_Extend(InterfaceType, Extend, InteractComponent, TraceTypeTag);
+}
+
+void UIS_BeInteractComponent::SomeoneInteractEnd(UIS_InteractComponent* InteractComponent, FGameplayTag TraceTypeTag)
+{
+	//不同的人同时交互，A先完成了，扣除交互次数，此时B应该被打断或无法完成
+	//交互结束需要清除历史记录中交互者的交互时间
+
+	//重置参数
+	BeInteractDynamicInfo.AllInteractComponent.Remove(InteractComponent);//从当前跟我交互的全部组件移除这个结束的交互者
+	BeInteractDynamicInfo.AllTryCompleteInteractComponent.Remove(InteractComponent);
+	BeInteractDynamicInfo.bIsInInteract = BeInteractDynamicInfo.AllInteractComponent.Num() > 0 ? true : false;//还有其他人交互吗
+	if (InteractRoleSignInfo.Contains(InteractComponent->GetRoleSign()))//我结束时有没有与被交互目标产生过TimerHandle
+	{
+		GetWorld()->GetTimerManager().ClearTimer(InteractRoleSignInfo[InteractComponent->GetRoleSign()].InteractTimerHandle);
+	}
+
+	if (BeInteractDynamicInfo.bInteractActive)//交互激活的资源才可能去扣除次数
+	{
+		if (BeInteractInfo.bInteractNumIsMultiplepeople)//交互次数分开记录吗
+		{
+			if (BeInteractInfo.EveryoneInteractNumSubtractType == EIS_InteractNumSubtractType::End && InteractComponent)
+			{
+				BeInteractDynamicInfo.RecordInteractInfo(InteractComponent->GetRoleSign(), 1, 0.0f, 0);
+			}
+		}
+		else
+		{
+			if (BeInteractInfo.InteractNumSubtractType == EIS_InteractNumSubtractType::End)
+			{
+				IIS_BeInteractInterface::Execute_SetInteractNum(this, BeInteractDynamicInfo.InteractNum - 1);
+			}
+		}
+	}
+
+	if (BeInteractDynamicInfo.AllInteractComponent.Num() <= 0)
+	{
+		IIS_BeInteractInterface::Execute_InteractEnd(this, InteractComponent, TraceTypeTag);
+	}
 }
 
 UAnimMontage* UIS_BeInteractComponent::GetMontageFromKeyName(FName KeyName)
